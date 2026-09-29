@@ -254,7 +254,8 @@ function enterApp() {
   $("start").classList.add("hidden");
   $("app").classList.remove("hidden");
   if (!state.scene) {
-    state.scene = new CaseScene($("scene"), null, {
+    try {
+      state.scene = new CaseScene($("scene"), null, {
       onPickMount: (id, panel) => {
         state.selectedMount = id;
         setFace(panel);
@@ -279,6 +280,10 @@ function enterApp() {
         tip.style.top = `${Math.min(ev.clientY + 16, window.innerHeight - tip.offsetHeight - 8)}px`;
       },
     });
+    } catch (err) {
+      console.error(err);
+      state.scene = null;
+    }
   }
   state.build.seals = { ...DEFAULT_SEALS, ...(state.build.seals || {}) };
   state.build.filters = state.build.filters || {};

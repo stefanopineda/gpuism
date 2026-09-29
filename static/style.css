@@ -307,18 +307,18 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
   .mock { max-width: none; order: 5; }
   .header-readout { display: none; }
   #net-seg { display: none; }
-  .header-actions { width: 100%; overflow-x: auto; }
+  .header-actions { width: 100%; flex-wrap: wrap; overflow: visible; }
   .demo-bar { flex-wrap: wrap; }
 
   .mobile-temps {
-    display: flex; gap: 8px; align-items: center; overflow-x: auto;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
     padding: 6px 10px; background: #100e0c; border-bottom: 1px solid var(--line);
     font-variant-numeric: tabular-nums;
   }
-  .mobile-temps .hot { font-size: 20px; font-weight: 750; white-space: nowrap; }
+  .mobile-temps .hot { font-size: 18px; font-weight: 750; white-space: nowrap; }
   .mobile-temps .mt {
-    font-size: 13px; font-weight: 650; white-space: nowrap;
-    padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px;
+    font-size: 12px; font-weight: 650; white-space: nowrap;
+    padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px;
   }
   .mobile-tabs {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
