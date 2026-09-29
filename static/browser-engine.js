@@ -7,7 +7,7 @@ statusEl.className = "fine solver-status";
 statusEl.textContent = "Loading the solver in this browser…";
 document.querySelector(".start-card")?.append(statusEl);
 
-const worker = new Worker(new URL("./browser-worker.js?v=be9283074b-35a06158", import.meta.url));
+const worker = new Worker(new URL("./browser-worker.js?v=048fe123ab-4860d5cc", import.meta.url));
 let seq = 0;
 const pending = new Map();
 

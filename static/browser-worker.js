@@ -10,7 +10,7 @@ function boot() {
     const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/" });
     self.postMessage({ type: "status", text: "Loading NumPy and the model…" });
     await pyodide.loadPackage(["numpy", "pyyaml", "pydantic"]);
-    const bundle = await fetch(new URL("../py-bundle.json?v=be9283074b-35a06158", self.location.href));
+    const bundle = await fetch(new URL("../py-bundle.json?v=048fe123ab-4860d5cc", self.location.href));
     if (!bundle.ok) throw new Error(`model bundle HTTP ${bundle.status}`);
     pyodide.FS.writeFile("/py-bundle.json", new Uint8Array(await bundle.arrayBuffer()));
     self.postMessage({ type: "status", text: "Starting the model…" });

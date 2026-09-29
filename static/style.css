@@ -308,6 +308,8 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
   .header-readout { display: none; }
   #net-seg { display: none; }
   .header-actions { width: 100%; flex-wrap: wrap; overflow: visible; }
+  /* Desktop tools; on a phone the header stays one row. */
+  #opt-run, #compare-toggle, #demo-toggle, #present-toggle { display: none; }
   .demo-bar { flex-wrap: wrap; }
 
   .mobile-temps {
