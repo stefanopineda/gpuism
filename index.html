@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>gpuism — air-cooled multi-GPU</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="start" class="start">
+    <div class="start-card">
+      <p class="eyebrow">Air-cooled multi-GPU workstation model · Celsius · not CFD</p>
+      <h1>Build the case. Watch the heat.</h1>
+      <p class="lede">Pick a machine to start from. Change anything after.</p>
+      <div class="quick">
+        <button id="quick-mike" class="quick-card" type="button">
+          <span class="q-kicker">Quick start</span>
+          <b id="quick-mike-name">Mike Bradley's Dengen X Station</b>
+          <span>Corsair 9000D · 4× RTX PRO 6000 Workstation, stacked · 275 W</span>
+        </button>
+        <button id="quick-meshify" class="quick-card" type="button">
+          <span class="q-kicker">Quick start</span>
+          <b>Stefano's Meshify 2 XL</b>
+          <span>Fractal Meshify 2 XL · 4× RTX PRO 6000 Max-Q blowers · rear shroud</span>
+        </button>
+      </div>
+      <details class="more">
+        <summary>More: start from a template or build from scratch</summary>
+        <div id="template-grid" class="template-grid"></div>
+        <div class="start-actions">
+          <select id="scratch-case"></select>
+          <button id="from-scratch" class="ghost" type="button">Build from scratch</button>
+        </div>
+      </details>
+      <p class="fine">GPU water blocks are out of scope. Typical accuracy ±5–10 °C; trust the ranking more than the number. Agents: <a href="/docs">/docs</a>.</p>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header>
+      <button id="home" class="brand" type="button" data-tip="Back to quick start and templates.">gpuism</button>
+      <span id="build-name" class="build-name"></span>
+      <div id="mock-banner" class="mock hidden">Illustrative mock — not a measurement or claim about anyone's real build.</div>
+      <div class="header-readout">
+        <span id="hot-readout" data-tip="Hottest die (throttled equilibrium). Unthrottled value in brackets when a card throttles.">—</span>
+        <span id="pressure-readout" data-tip="">case — Pa</span>
+        <span id="ambient-readout" data-tip="">25 °C</span>
+      </div>
+      <div class="header-actions">
+        <div class="seg" role="group" data-tip="">
+          <button data-view="front34" class="on" type="button">¾ front</button>
+          <button data-view="side" type="button">Side</button>
+          <button data-view="rear34" type="button">¾ rear</button>
+        </div>
+        <div class="seg" role="group" id="net-seg">
+          <button data-net="off" class="on" type="button">Case</button>
+          <button data-net="split" type="button">Split</button>
+          <button data-net="full" type="button">Network</button>
+        </div>
+        <button id="opt-run" type="button">Optimize</button>
+        <button id="unit-toggle" type="button">°F</button>
+        <button id="compare-toggle" type="button">Compare</button>
+        <button id="demo-toggle" type="button">Demo</button>
+        <button id="present-toggle" type="button">Present</button>
+      </div>
+    </header>
+
+    <div id="mobile-temps" class="mobile-temps" aria-label="GPU temperatures"></div>
+
+    <main class="layout">
+      <nav id="facebar" class="facebar" aria-label="Case faces">
+        <button data-face="case" type="button"><b>Case</b><span id="fb-case"></span></button>
+        <button data-face="front" type="button"><b>Front</b><span id="fb-front"></span></button>
+        <button data-face="top" type="button"><b>Top</b><span id="fb-top"></span></button>
+        <button data-face="rear" type="button"><b>Rear</b><span id="fb-rear"></span></button>
+        <button data-face="bottom" type="button"><b>Bottom</b><span id="fb-bottom"></span></button>
+        <button data-face="side" type="button"><b>Side</b><span id="fb-side"></span></button>
+        <button data-face="internals" type="button"><b>Internals</b><span id="fb-internals"></span></button>
+        <button data-face="gpus" type="button"><b>GPUs</b><span id="fb-gpus"></span></button>
+      </nav>
+      <section id="panel" class="panel"></section>
+
+      <div id="stage" class="stage net-off">
+        <div id="demo-bar" class="demo-bar hidden">
+          <div class="demo-copy"><strong id="demo-title"></strong><p id="demo-points"></p></div>
+          <div class="demo-nav">
+            <button id="demo-prev" type="button">Prev</button>
+            <span id="demo-count"></span>
+            <button id="demo-next" type="button">Next</button>
+            <label class="check"><input id="demo-auto" type="checkbox" /> auto</label>
+            <button id="demo-close" type="button">Close</button>
+          </div>
+        </div>
+        <div class="views">
+          <div id="view3d" class="view3d">
+            <canvas id="scene"></canvas>
+            <div id="legend" class="legend">
+              <span data-tip=""><i class="swatch intake"></i>Intake</span>
+              <span data-tip=""><i class="swatch exhaust"></i>Exhaust</span>
+              <span data-tip=""><i class="swatch blank"></i>Cover plate</span>
+              <span data-tip=""><i class="swatch gpu"></i>GPU by die °C</span>
+            </div>
+            <div id="face-inset" class="face-inset"></div>
+          </div>
+          <div id="netview" class="netview"></div>
+        </div>
+        <section id="compare" class="compare hidden"></section>
+      </div>
+
+      <aside id="readout" class="readout"></aside>
+    </main>
+    <nav id="mobile-tabs" class="mobile-tabs" aria-label="Views">
+      <button type="button" data-mtab="pc">PC</button>
+      <button type="button" data-mtab="customize">Customize</button>
+      <button type="button" data-mtab="network">Resistor</button>
+      <button type="button" data-mtab="split">Split</button>
+    </nav>
+    <footer>
+      Air-cooled only. GPU water blocks are out of scope.
+      Typical accuracy ±5–10 °C absolute; better for ranking configurations than for absolute temperatures.
+      Compact network model after Ellison, Idelchik and flow-network electronics cooling — not a CFD result. Celsius throughout.
+    </footer>
+  </div>
+  <div id="tip" class="tip" hidden></div>
+  <script type="module" src="/static/browser-engine.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
