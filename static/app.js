@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js";
-import { renderNetwork } from "./network.js";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=be9283074b-35a06158";
+import { renderNetwork } from "./network.js?v=be9283074b-35a06158";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=be9283074b-35a06158";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -28,6 +28,7 @@ const state = {
   scene: null,
   mtab: "pc",
   mtabChosen: false,
+  worth: { sig: null, result: null, loading: false, bandsLoading: false, error: null, test: null, undo: null },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -94,6 +95,7 @@ async function boot() {
   buildStartScreen();
   $("home").onclick = () => {
     stopDemo();
+    history.replaceState(null, "", location.pathname + location.search);
     $("app").classList.add("hidden");
     $("start").classList.remove("hidden");
   };
@@ -116,6 +118,11 @@ async function boot() {
   $("demo-close").onclick = stopDemo;
   $("demo-auto").onchange = syncDemoTimer;
   $("opt-run").onclick = runOptimal;
+  $("worth-open").onclick = () => {
+    setFace("worth");
+    if (document.body.classList.contains("is-mobile")) setMobileTab("worth");
+  };
+  $("share-link").onclick = copyShareLink;
   window.addEventListener("keydown", onKey);
 
   const params = new URLSearchParams(location.search);
@@ -126,7 +133,9 @@ async function boot() {
   const template = params.get("template");
   const demo = params.get("demo");
   let pending = null;
-  if (demo === "mike-bradley" || demo === "mike") pending = loadBuild(QUICK.mike).then(() => startDemo("mike-bradley-demo"));
+  const shared = location.hash.startsWith("#b=") ? location.hash.slice(3) : null;
+  if (shared) pending = loadShared(shared);
+  else if (demo === "mike-bradley" || demo === "mike") pending = loadBuild(QUICK.mike).then(() => startDemo("mike-bradley-demo"));
   else if (demo === "stefano") pending = loadBuild(QUICK.meshify).then(() => startDemo("stefano-demo"));
   else if (template) pending = loadBuild(template);
   else if (start === "meshify") pending = loadBuild(QUICK.meshify);
@@ -191,6 +200,7 @@ async function loadBuild(id) {
   state.gaps = null;
   state.notice = null;
   enterApp();
+  scheduleHash();
   await solveNow();
 }
 
@@ -299,6 +309,7 @@ function enterApp() {
 function setFace(face) {
   state.face = face;
   renderPanel();
+  if (face === "worth") runWorth();
   renderInset();
   state.scene?.update(sceneCtx());
 }
@@ -312,7 +323,7 @@ function syncMobileChrome() {
   const on = window.matchMedia("(max-width: 800px)").matches;
   if (on && !state.mtabChosen) state.mtab = state.net === "full" ? "network" : state.net === "split" ? "split" : state.mtab || "pc";
   document.body.classList.toggle("is-mobile", on);
-  for (const tab of ["pc", "customize", "network", "split"]) {
+  for (const tab of ["pc", "customize", "worth", "network", "split"]) {
     document.body.classList.toggle(`mtab-${tab}`, on && state.mtab === tab);
   }
   document.querySelectorAll("[data-mtab]").forEach((b) => b.classList.toggle("on", b.dataset.mtab === state.mtab));
@@ -324,6 +335,8 @@ function setMobileTab(tab) {
   if (tab === "network") setNet("full");
   else if (tab === "split") setNet("split");
   else setNet("off");
+  if (tab === "worth" && state.face !== "worth") setFace("worth");
+  if (tab === "customize" && state.face === "worth") setFace("case");
   syncMobileChrome();
 }
 
@@ -361,12 +374,14 @@ function setNet(mode, quiet) {
 
 function renderPanel() {
   document.querySelectorAll("#facebar button").forEach((b) => b.classList.toggle("on", b.dataset.face === state.face));
+  document.body.classList.toggle("face-worth", state.face === "worth");
   renderFacebar();
   const root = $("panel");
   root.innerHTML = "";
   if (state.face === "case") root.append(...casePanel());
   else if (FACES.includes(state.face)) root.append(...facePanel(state.face));
   else if (state.face === "internals") root.append(...internalsPanel());
+  else if (state.face === "worth") root.append(...worthPanel());
   else root.append(...gpusPanel());
 }
 
@@ -947,6 +962,9 @@ function renderFacebar() {
     if (face === "side") parts.push(b.side_panel === "tempered_glass" ? "glass" : b.side_panel);
     $(`fb-${face}`).textContent = parts.join(" · ") || (mounts.length ? "plugged" : "no mounts");
   });
+  const w = state.worth.result && state.worth.sig === JSON.stringify(b) ? state.worth.result : null;
+  const good = w ? w.rows.filter((r) => !r.inside_noise && r.gain_c > 0).length : null;
+  $("fb-worth").textContent = w ? (good ? `${good} worth doing` : "nothing clears the noise") : "rank the changes";
   $("fb-internals").textContent = `CPU ${b.cpu?.cooling === "water" ? "AIO" : "air"} ${Math.round(b.cpu?.power_w ?? 0)} W`;
   $("fb-gpus").textContent = `${b.gpus.length} × ${(cardOf(b.gpus[0]?.card)?.name || "").replace(/^NVIDIA (GeForce )?/, "").replace(/ Blackwell/, "").replace(/ \(\d+ W\)$/, "")}`;
 }
@@ -961,6 +979,7 @@ function changed(rerenderPanel = false) {
   renderInset();
   clearTimeout(timer);
   timer = setTimeout(solveNow, 160);
+  scheduleHash();
 }
 
 async function solveNow() {
@@ -975,6 +994,7 @@ async function solveNow() {
   }
   renderResults();
   if (state.face === "gpus") renderPanel();
+  if (state.face === "worth" && !state.solution.error) runWorth();
 }
 
 function sceneCtx() {
@@ -1225,7 +1245,319 @@ async function runOptimal() {
   }
 }
 
+/* ------------------------------------------------------------------ worth it? */
+
+/* Every single change to the build as it stands, ranked by how much cooler the
+ * hottest GPU gets. The list comes back fast from single solves; the paired
+ * Monte Carlo bands follow in a second request. */
+let worthSeq = 0;
+
+async function postJSON(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok) throw new Error(typeof out.detail === "string" ? out.detail : JSON.stringify(out.detail));
+  return out;
+}
+
+async function runWorth() {
+  if (!state.build) return;
+  const sig = JSON.stringify(state.build);
+  const w = state.worth;
+  if (w.sig === sig && (w.result || w.loading)) return;
+  const token = ++worthSeq;
+  Object.assign(w, { sig, result: null, loading: true, bandsLoading: false, error: null });
+  if (state.face === "worth") renderPanel();
+  try {
+    const quick = await postJSON("/api/worth", { build: state.build, mc: 0 });
+    if (token !== worthSeq) return;
+    Object.assign(w, { result: quick, loading: false, bandsLoading: true });
+    if (state.face === "worth") renderPanel();
+    renderFacebar();
+    const full = await postJSON("/api/worth", { build: state.build, mc: window.GPUSIM_BROWSER ? 8 : 24 });
+    if (token !== worthSeq) return;
+    Object.assign(w, { result: full, bandsLoading: false });
+  } catch (err) {
+    if (token !== worthSeq) return;
+    Object.assign(w, { loading: false, bandsLoading: false, error: String(err.message || err) });
+  }
+  if (state.face === "worth") renderPanel();
+}
+
+const signed = (c, digits = 1) => {
+  const v = state.unitF ? (c * 9) / 5 : c;
+  const txt = Math.abs(v) < 0.05 ? (0).toFixed(digits) : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(digits)}`;
+  return `${txt} ${state.unitF ? "°F" : "°C"}`;
+};
+
+function worthPanel() {
+  const w = state.worth;
+  const out = [
+    el("h2", {}, "Worth it?"),
+    el("p", { class: "sub" }, "Every single change you could make to this build, ranked by how much cooler the hottest GPU gets. Apply one with a click."),
+  ];
+  if (w.error) out.push(el("p", { class: "warn" }, w.error));
+  const r = w.result;
+  if (!r) {
+    out.push(el("p", { class: "fine" }, w.loading ? "Solving every change…" : ""));
+    return out;
+  }
+  const good = r.rows.filter((x) => !x.inside_noise && x.gain_c > 0);
+  const noise = r.rows.filter((x) => x.inside_noise);
+  const verdict = good.length
+    ? `Worth doing: ${good.map((x) => `${x.title[0].toLowerCase()}${x.title.slice(1)} (${signed(-x.gain_c)}, ${x.effort_label.toLowerCase()})`).join("; ")}.`
+    : "Nothing here clears the noise. Leave the case alone.";
+  out.push(
+    el(
+      "div",
+      { class: "worth-verdict" },
+      el("b", {}, verdict),
+      noise.length ? el("span", {}, ` ${noise.length} change${noise.length > 1 ? "s" : ""} inside the noise.`) : null,
+      el("div", { class: "fine" }, `As built: hottest GPU ${fmt(r.base.hottest_die_c)}${r.base.throttling ? ` (throttling; ${fmt(r.base.hottest_unthrottled_c)} unthrottled)` : ""}.`),
+    ),
+  );
+  if (w.undo) {
+    out.push(
+      el("div", { class: "worth-applied" }, `Applied: ${w.undo.title}. The list below is now relative to the new build. `, el("button", { type: "button", onclick: undoWorth }, "Undo")),
+    );
+  }
+  out.push(
+    el(
+      "p",
+      { class: "fine" },
+      w.bandsLoading
+        ? "Adding uncertainty bands (paired Monte Carlo: the same random inputs before and after each change)…"
+        : r.mc
+          ? `Bands: 90 % range over ${r.mc} paired Monte Carlo draws.`
+          : "",
+    ),
+  );
+  const span = Math.max(8, ...r.rows.map((x) => Math.abs(x.gain_c)), ...r.rows.flatMap((x) => (x.band_c ? x.band_c.map(Math.abs) : []))) + 1;
+  r.rows.forEach((row) => out.push(worthRow(row, r, span)));
+  if (!r.rows.length) out.push(el("p", { class: "fine" }, "No single change applies to this build."));
+  out.push(el("p", { class: "fine worth-rule" }, `${r.noise_rule} Metric: ${r.metric}.`));
+  return out;
+}
+
+/* A bar from −span to +span °C: noise zone shaded, band as a bar, estimate as a dot.
+ * Cooler is to the left. */
+function worthBar(row, floor, span) {
+  const pos = (c) => `${(((c + span) / (2 * span)) * 100).toFixed(2)}%`;
+  const kids = [
+    el("i", { class: "wb-noise", style: `left:${pos(-floor)};width:${((floor / span) * 50).toFixed(2)}%` }),
+    el("i", { class: "wb-zero", style: `left:${pos(0)}` }),
+  ];
+  if (row.band_c) {
+    const lo = -row.band_c[1];
+    const hi = -row.band_c[0];
+    kids.push(el("i", { class: "wb-band", style: `left:${pos(lo)};width:${(((hi - lo) / (2 * span)) * 100).toFixed(2)}%` }));
+  }
+  kids.push(el("i", { class: "wb-dot", style: `left:${pos(-row.gain_c)}` }));
+  return el("div", { class: "worth-bar", tip: `Cooler to the left. Shaded: ±${floor} °C noise zone. Bar: 90 % band. Dot: estimate.` }, kids);
+}
+
+function worthRow(row, r, span) {
+  const cls = row.inside_noise ? "noise" : row.gain_c > 0 ? "good" : "bad";
+  const band = row.band_c ? `90 %: ${signed(-row.band_c[1])} to ${signed(-row.band_c[0])}` : state.worth.bandsLoading ? "band…" : "";
+  const testing = state.worth.test === row.id;
+  return el(
+    "div",
+    { class: `worth-row ${cls}` },
+    el("div", { class: "wr-head" }, el("b", {}, row.title), el("span", { class: `effort e-${row.effort}` }, row.effort_label)),
+    el(
+      "div",
+      { class: "wr-num" },
+      el("span", { class: "delta" }, signed(-row.gain_c)),
+      el("span", { class: "band" }, band),
+      row.inside_noise ? el("span", { class: "noise-chip", tip: `${row.noise_reason}. ${r.noise_rule}` }, "inside the noise") : null,
+    ),
+    worthBar(row, r.noise_floor_c, span),
+    row.framing === "shroud_on" ? el("p", { class: "wr-frame" }, `Your shroud is worth ${signed(row.gain_c < 0 ? -row.gain_c : row.gain_c).replace(/^[+−]/, "")} on this build.`) : null,
+    el("p", { class: "fine" }, `${row.detail} ${row.note || ""}`),
+    el(
+      "div",
+      { class: "wr-actions" },
+      el("button", { type: "button", class: "primary", onclick: () => applyWorth(row) }, "Apply"),
+      el("button", { type: "button", onclick: () => ((state.worth.test = testing ? null : row.id), renderPanel()) }, testing ? "Hide test" : "Test it for real"),
+    ),
+    testing ? testBox(row, r) : null,
+  );
+}
+
+function applyWorth(row) {
+  state.worth.undo = { build: JSON.parse(JSON.stringify(state.build)), title: row.title };
+  state.worth.test = null;
+  const next = JSON.parse(JSON.stringify(row.build));
+  next.name = state.build.name;
+  state.build = next;
+  state.gaps = null;
+  // Drop the old ranking at once: it was relative to the build before the change.
+  worthSeq += 1;
+  Object.assign(state.worth, { sig: null, result: null, loading: true, bandsLoading: false });
+  changed(true);
+}
+
+function undoWorth() {
+  if (!state.worth.undo) return;
+  state.build = state.worth.undo.build;
+  state.worth.undo = null;
+  state.gaps = null;
+  worthSeq += 1;
+  Object.assign(state.worth, { sig: null, result: null, loading: true, bandsLoading: false });
+  changed(true);
+}
+
+/* Measured vs predicted, for a live test: temperatures before and after the
+ * change, with the room temperature each time so drift can be taken out. */
+function testBox(row, r) {
+  const key = `gpusim-measure:${state.build.id}:${row.id}`;
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(key) || "{}");
+  } catch {
+    saved = {};
+  }
+  const shroudOn = row.framing === "shroud_on";
+  const labels = shroudOn ? ["With the shroud (as built)", "Without the shroud"] : ["As built", `After: ${row.title[0].toLowerCase()}${row.title.slice(1)}`];
+  const predicted = [r.base.hottest_die_c, row.after.hottest_die_c];
+  const result = el("div", { class: "test-result" });
+  const input = (name, label) =>
+    el(
+      "label",
+      {},
+      label,
+      el("input", {
+        type: "number",
+        step: "0.1",
+        inputmode: "decimal",
+        value: saved[name] ?? "",
+        oninput: (ev) => {
+          saved[name] = ev.target.value;
+          try {
+            localStorage.setItem(key, JSON.stringify(saved));
+          } catch {
+            /* private mode */
+          }
+          update();
+        },
+      }),
+    );
+  const num = (v) => (v === undefined || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
+  const update = () => {
+    const [a, b, ra, rb] = ["before", "after", "room_before", "room_after"].map((k) => num(saved[k]));
+    result.replaceChildren();
+    if (a == null || b == null) {
+      result.append(el("span", { class: "fine" }, "Enter the hottest GPU temperature for both states (°C, steady state under the same load)."));
+      return;
+    }
+    const drift = ra != null && rb != null ? rb - ra : 0;
+    const measured = b - a - drift;
+    const pred = -row.gain_c;
+    const lo = row.band_c ? -row.band_c[1] : pred - 1;
+    const hi = row.band_c ? -row.band_c[0] : pred + 1;
+    const inside = measured >= lo - 1 && measured <= hi + 1; // ±1 °C for the reading itself
+    result.append(
+      el("b", {}, `Measured ${signed(measured)} vs predicted ${signed(pred)}`),
+      el("span", {}, drift ? ` (room drift ${signed(drift)} taken out)` : ""),
+      el(
+        "div",
+        { class: inside ? "ok" : "warn" },
+        inside ? "Inside the prediction (band ± 1 °C for the reading)." : `Outside the prediction by ${signed(measured < lo - 1 ? measured - lo : measured - hi).replace(/^[+−]/, "")}.`,
+      ),
+      el("div", { class: "fine" }, Math.abs(measured) < r.noise_floor_c ? `Under ${r.noise_floor_c} °C either way: not worth tearing the case apart for.` : "Big enough to matter."),
+    );
+  };
+  update();
+  return el(
+    "div",
+    { class: "test-box" },
+    el("p", { class: "fine" }, `Predicted: ${labels[0]} ${fmt(predicted[0])} · ${labels[1]} ${fmt(predicted[1])}. Run each state until temperatures flatten (10–15 min under load) and note the room temperature each time.`),
+    el("div", { class: "row" }, input("before", `${labels[0]} °C`), input("after", `${labels[1]} °C`)),
+    el("div", { class: "row" }, input("room_before", `Room °C, ${shroudOn ? "with" : "as built"} (optional)`), input("room_after", `Room °C, ${shroudOn ? "without" : "after"} (optional)`)),
+    result,
+  );
+}
+
+/* ------------------------------------------------------------------ share link */
+
+/* The whole build rides in the URL fragment (after #), so it never reaches a
+ * server: deflate-raw when the browser has CompressionStream, else plain JSON. */
+const b64url = (bytes) => {
+  let bin = "";
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const unb64url = (text) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (ch) => ch.charCodeAt(0));
+
+async function encodeBuild(build) {
+  const bytes = new TextEncoder().encode(JSON.stringify(build));
+  if (window.CompressionStream) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    return `z${b64url(new Uint8Array(await new Response(stream).arrayBuffer()))}`;
+  }
+  return `j${b64url(bytes)}`;
+}
+
+async function decodeBuild(text) {
+  const bytes = unb64url(text.slice(1));
+  if (text[0] === "z") {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return JSON.parse(await new Response(stream).text());
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+let hashTimer = null;
+function scheduleHash() {
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(async () => {
+    if (!state.build) return;
+    try {
+      history.replaceState(null, "", `${location.pathname}${location.search}#b=${await encodeBuild(state.build)}`);
+    } catch {
+      /* keep the old URL */
+    }
+  }, 500);
+}
+
+async function loadShared(text) {
+  try {
+    state.build = await decodeBuild(text);
+  } catch {
+    showLoadError("That shared link is damaged or incomplete. Start from a template instead.");
+    return;
+  }
+  state.gaps = null;
+  state.notice = null;
+  enterApp();
+  await solveNow();
+}
+
+async function copyShareLink() {
+  if (!state.build) return;
+  const url = `${location.origin}${location.pathname}#b=${await encodeBuild(state.build)}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied. It holds the whole build; nothing is uploaded.");
+  } catch {
+    const field = el("input", { value: url, readonly: true, class: "toast-url" });
+    toast("Copy this link:", field);
+    field.select();
+  }
+}
+
+function toast(text, extra) {
+  let box = document.getElementById("toast");
+  if (!box) {
+    box = el("div", { id: "toast", class: "toast" });
+    document.body.append(box);
+  }
+  box.replaceChildren(el("span", {}, text), extra || "");
+  box.classList.add("show");
+  clearTimeout(box._t);
+  box._t = setTimeout(() => box.classList.remove("show"), extra ? 12000 : 3000);
+}
+
 // Handle for scripted checks (headless screenshots, OBS macros). Not an API.
-window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow };
+window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow, runWorth, copyShareLink, encodeBuild };
 
 boot();

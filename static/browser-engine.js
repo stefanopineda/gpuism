@@ -7,7 +7,7 @@ statusEl.className = "fine solver-status";
 statusEl.textContent = "Loading the solver in this browser…";
 document.querySelector(".start-card")?.append(statusEl);
 
-const worker = new Worker(new URL("./browser-worker.js", import.meta.url));
+const worker = new Worker(new URL("./browser-worker.js?v=be9283074b-35a06158", import.meta.url));
 let seq = 0;
 const pending = new Map();
 
@@ -33,6 +33,7 @@ function callWorker(method, path, body) {
 }
 
 const nativeFetch = window.fetch.bind(window);
+const STAMP = new URL(import.meta.url).search; // the site build's ?v= cache stamp
 window.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   let path = url;
@@ -43,6 +44,17 @@ window.fetch = async (input, init) => {
   }
   if (!path.startsWith("/api/")) return nativeFetch(input, init);
   const method = (init && init.method) || "GET";
+  // Presets and saved builds were written out as static JSON at build time:
+  // serve them without waiting for Python, so the page draws at once.
+  if (method === "GET" && (path === "/api/presets" || /^\/api\/build\/[\w.-]+$/.test(path))) {
+    const file = path === "/api/presets" ? "presets.json" : `build/${path.slice("/api/build/".length)}.json`;
+    try {
+      const res = await nativeFetch(new URL(`./api/${file}${STAMP}`, import.meta.url));
+      if (res.ok) return res;
+    } catch {
+      /* fall through to the worker */
+    }
+  }
   const body = init && init.body != null ? String(init.body) : "";
   try {
     const raw = await callWorker(method, path, body);

@@ -321,7 +321,7 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
     padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px;
   }
   .mobile-tabs {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
     background: #100e0c; border-top: 1px solid var(--line);
   }
@@ -341,9 +341,12 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
   body.mtab-pc .panel,
   body.mtab-pc .readout { display: none !important; }
 
-  body.mtab-customize .stage { display: none; }
+  body.mtab-customize .stage, body.mtab-worth .stage { display: none; }
   body.mtab-customize .layout { grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
   body.mtab-customize .facebar { overflow: auto; }
+  body.mtab-worth .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  body.mtab-worth .facebar, body.mtab-worth .readout { display: none !important; }
+  #worth-open, #share-link { padding: 6px 10px; }
   body.mtab-customize .readout {
     display: block; grid-column: 1 / -1; max-height: 32vh;
     border-left: none; border-top: 1px solid var(--line);
@@ -363,4 +366,63 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
     grid-template-rows: minmax(190px, 40vh) minmax(220px, 1fr);
   }
   body.mtab-split .netview { border-left: none; border-top: 1px solid var(--line); }
+}
+
+/* ------------------------------------------------------------------ worth it? */
+.facebar .worth-face { border-top: 1px solid var(--line); margin-top: 6px; }
+.facebar .worth-face b { color: var(--copper); }
+.worth-verdict { background: var(--bg-2); border: 1px solid var(--copper); border-radius: 10px; padding: 10px 12px; margin: 8px 0; line-height: 1.45; }
+.worth-verdict b { font-size: 15px; }
+.worth-applied { background: #1d2a1f; border: 1px solid #3f6b46; border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+.worth-applied button { margin-left: 6px; }
+.worth-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: var(--bg-2); }
+.worth-row.good { border-color: #3f6b46; }
+.worth-row.bad { border-color: #6b3a33; }
+.worth-row .wr-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.worth-row .wr-head b { font-size: 15px; }
+.effort { font-size: 11px; white-space: nowrap; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.effort.e-free { color: #9fd8a6; border-color: #3f6b46; }
+.effort.e-10min { color: #e6c98f; border-color: #6b5a33; }
+.effort.e-rebuild { color: #f0a58f; border-color: #6b3a33; }
+.worth-row .wr-num { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.worth-row .delta { font-size: 24px; font-weight: 750; }
+.worth-row.good .delta { color: #7fd08a; }
+.worth-row.bad .delta { color: #ef7b6a; }
+.worth-row.noise .delta { color: var(--muted); }
+.worth-row .band { color: var(--muted); font-size: 12px; }
+.noise-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #2e2922; color: var(--muted); border: 1px dashed var(--muted); }
+.worth-bar { position: relative; height: 12px; margin: 6px 0; background: #17140f; border-radius: 6px; overflow: hidden; }
+.worth-bar i { position: absolute; top: 0; bottom: 0; display: block; }
+.worth-bar .wb-noise { background: repeating-linear-gradient(45deg, #2b261f, #2b261f 4px, #221e18 4px, #221e18 8px); }
+.worth-bar .wb-zero { width: 1px; background: var(--muted); }
+.worth-bar .wb-band { background: rgba(224, 161, 90, 0.45); top: 3px; bottom: 3px; border-radius: 3px; }
+.worth-bar .wb-dot { width: 10px; height: 10px; top: 1px; margin-left: -5px; border-radius: 50%; background: var(--ink); }
+.worth-row .wr-frame { margin: 6px 0; font-weight: 650; color: var(--copper); }
+.worth-row .wr-actions { display: flex; gap: 8px; margin-top: 6px; }
+.worth-rule { margin-top: 14px; }
+.test-box { margin-top: 10px; padding: 10px; border: 1px dashed var(--copper); border-radius: 8px; }
+.test-box .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
+.test-box label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.test-result { margin-top: 8px; line-height: 1.5; }
+.test-result b { font-size: 16px; }
+.test-result .ok { color: #7fd08a; font-weight: 650; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 60;
+  background: #231d16; border: 1px solid var(--copper); border-radius: 10px; padding: 10px 14px; display: flex; gap: 8px; align-items: center;
+  transition: opacity 0.2s, transform 0.2s; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast-url { width: min(60vw, 520px); }
+
+/* Worth it? gets a wider panel, and stays on screen in Present mode (the stream view). */
+body.face-worth .layout { grid-template-columns: 104px 440px minmax(0, 1fr) 300px; }
+body.face-worth.net-split .layout, body.face-worth.net-full .layout { grid-template-columns: 104px 440px minmax(0, 1fr); }
+body.present.face-worth .panel { display: block; }
+body.present.face-worth .layout { grid-template-columns: 480px minmax(0, 1fr) 340px; }
+body.present .worth-row .delta { font-size: 30px; }
+body.present .worth-verdict b { font-size: 18px; }
+@media (max-width: 1300px) {
+  body.face-worth .layout { grid-template-columns: 92px 380px minmax(0, 1fr); }
+  body.present.face-worth .layout { grid-template-columns: 420px minmax(0, 1fr); }
+}
+@media (max-width: 800px) {
+  body.face-worth .layout, body.present.face-worth .layout { grid-template-columns: minmax(0, 1fr); }
 }
