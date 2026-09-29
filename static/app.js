@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=048fe123ab-4860d5cc";
-import { renderNetwork } from "./network.js?v=048fe123ab-4860d5cc";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=048fe123ab-4860d5cc";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=e6b8122216-c827829c";
+import { renderNetwork } from "./network.js?v=e6b8122216-c827829c";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=e6b8122216-c827829c";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
