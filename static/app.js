@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=ecb332bb6f-a5218f59";
-import { renderNetwork } from "./network.js?v=ecb332bb6f-a5218f59";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=ecb332bb6f-a5218f59";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=80727f0a0d-e1e38c70";
+import { renderNetwork } from "./network.js?v=80727f0a0d-e1e38c70";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=80727f0a0d-e1e38c70";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -167,7 +167,7 @@ function buildStartScreen() {
   $("quick-meshify").onclick = () => loadBuild(QUICK.meshify);
   const grid = $("template-grid");
   grid.innerHTML = "";
-  const order = ["corsair-9000d-sample", "generic-atx-sample", "generic-matx-sample", "generic-eatx-sample", "phanteks-enthoo-sample"];
+  const order = ["silverstone-rm52-4x-maxq", "corsair-9000d-sample", "generic-atx-sample", "generic-matx-sample", "generic-eatx-sample", "phanteks-enthoo-sample"];
   order
     .map((id) => state.presets.builds.find((b) => b.id === id))
     .filter(Boolean)
@@ -219,8 +219,17 @@ function showLoadError(text) {
   box.onclick = () => box.classList.add("hidden");
 }
 
+const STOCK_FANS = {
+  "silverstone-rm52": {
+    "rear-140": { fan: "silverstone-rm52-included-140", state: "fan", direction: "exhaust" },
+    "rear-80-1": { fan: "silverstone-rm52-included-80", state: "fan", direction: "exhaust" },
+    "rear-80-2": { fan: "silverstone-rm52-included-80", state: "fan", direction: "exhaust" },
+  },
+};
+
 function scratch(caseId) {
   const kase = state.presets.cases.find((c) => c.id === caseId);
+  const stock = STOCK_FANS[caseId] || {};
   state.build = {
     id: "scratch",
     name: `From scratch · ${kase.name}`,
@@ -228,19 +237,30 @@ function scratch(caseId) {
     ambient_c: 25,
     altitude_m: 0,
     gpus: [gpuTemplate("gpu1", "1", "rtx-pro-6000-blackwell-maxq")],
-    mounts: kase.mounts.map((m) => ({ id: m.id, panel: m.panel, size_mm: m.size_mm, fan: null, state: "blanked", direction: "intake", duty: 1 })),
+    mounts: kase.mounts.map((m) => {
+      const preset = stock[m.id];
+      return {
+        id: m.id,
+        panel: m.panel,
+        size_mm: m.size_mm,
+        fan: preset?.fan || null,
+        state: preset?.state || (caseId === "silverstone-rm52" && m.panel === "front" ? "empty" : "blanked"),
+        direction: preset?.direction || "intake",
+        duty: 1,
+      };
+    }),
     radiator: { model: null, panel: "top", direction: "exhaust", arrangement: "push", fan: "generic-120", fan_count: 3, fan_duty: 1 },
     cpu: { power_w: 150, cooling: "air", cooler_fan: "generic-140", cooler_fans: "both", cooler_airflow: "up", cooler_duty: 0.8 },
     shroud: { mode: "off", intake: "open", fan: "noctua-nf-a14-ippc-3000", count: 2, duty: 1 },
     seals: { ...DEFAULT_SEALS },
     filters: { front: "fine" },
-    patterns: {},
+    patterns: caseId === "silverstone-rm52" ? { rear: "1x140", front: "6x120" } : {},
     obstruction: "low",
     cables: "clean",
     psu_location: "bottom_shroud",
     psu_fan: "down",
     drive_cage: "removed",
-    side_panel: kase.side_panel === "mesh" ? "mesh" : "tempered_glass",
+    side_panel: caseId === "silverstone-rm52" ? "steel" : kase.side_panel === "mesh" ? "mesh" : "tempered_glass",
     brackets_removed: false,
     room_reingestion_c: 0,
     buoyancy: false,

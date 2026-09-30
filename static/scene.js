@@ -9,8 +9,8 @@
  * lit ring on each fan (blue intake, red exhaust, amber internal) and a light
  * bar on each GPU in its die-temperature colour. No text is drawn over the
  * scene; hovering an object reports it instead. */
-import * as THREE from "./vendor/three.module.js?v=ecb332bb6f-a5218f59";
-import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=ecb332bb6f-a5218f59";
+import * as THREE from "./vendor/three.module.js?v=80727f0a0d-e1e38c70";
+import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=80727f0a0d-e1e38c70";
 import {
   CUE,
   MAT,
@@ -27,7 +27,7 @@ import {
   radiatorModel,
   tag,
   tube,
-} from "./parts.js?v=ecb332bb6f-a5218f59";
+} from "./parts.js?v=80727f0a0d-e1e38c70";
 
 const VIEWS = {
   front34: new THREE.Vector3(0.62, 0.38, 1.0),
@@ -250,7 +250,12 @@ export class CaseScene {
     panel(W, H, meshPanelMaterial(W, H, 0.8), new THREE.Vector3(D + t, H / 2, W / 2), [0, Math.PI / 2, 0]);
     panel(W, H, meshPanelMaterial(W, H, 0.92), new THREE.Vector3(-t, H / 2, W / 2), [0, -Math.PI / 2, 0]);
     panel(D, W, meshPanelMaterial(D, W, 0.9), new THREE.Vector3(D / 2, H + t, W / 2), [-Math.PI / 2, 0, 0]);
-    const side = this.ctx.build.side_panel === "mesh" ? meshPanelMaterial(D, H, 0.85) : MAT.glass;
+    const side =
+      this.ctx.build.side_panel === "mesh"
+        ? meshPanelMaterial(D, H, 0.85)
+        : this.ctx.build.side_panel === "steel"
+          ? MAT.steel
+          : MAT.glass;
     panel(D - 0.02, H - 0.02, side, new THREE.Vector3(D / 2, H / 2, W + t), [0, 0, 0]);
     // Frame rails on all twelve edges, and rubber feet.
     const rail = 0.009;
@@ -312,8 +317,14 @@ export class CaseScene {
     const shroudTop = Math.max(0.1, Math.min(lowest - m(kase.psu_shroud_clearance_mm || 40), H * 0.36));
     const psuFanUp = build.psu_fan === "up";
     const psu = psuModel(psuFanUp);
-    psu.position.set(D - 0.012 - 0.085, 0.012 + 0.043, W / 2);
-    this._add(psu, { kind: "part", tip: `PSU, bottom rear${shrouded ? ", under the PSU shroud" : ""}, fan ${psuFanUp ? "up" : "down"}` });
+    // RM52's ATX bay is drawn at the front. The eight-slot stack fills the rear,
+    // and SilverStone does not publish a PSU station. Other cases stay bottom rear.
+    const psuAtFront = kase.id === "silverstone-rm52";
+    psu.position.set(psuAtFront ? 0.012 + 0.085 : D - 0.012 - 0.085, 0.012 + 0.043, W / 2);
+    this._add(psu, {
+      kind: "part",
+      tip: `PSU, ${psuAtFront ? "front bay (RM52 drawing)" : "bottom rear"}${shrouded ? ", under the PSU shroud" : ""}, fan ${psuFanUp ? "up" : "down"}`,
+    });
     if (shrouded) {
       const g = new THREE.Group();
       const top = new THREE.Mesh(new THREE.BoxGeometry(D - 0.01, 0.0015, W - 0.01), meshPanelMaterial(D, W, 0.95));
@@ -351,9 +362,14 @@ export class CaseScene {
     const z = m(layout.z_mm);
     switch (panel) {
       case "front":
-        return { pos: new THREE.Vector3(0, y, z), normal: new THREE.Vector3(-1, 0, 0) };
+        // x under 80 mm is a skin offset on the other cases (0–40 mm) and stays
+        // on the front panel. Farther in is an internal bracket (RM52's second
+        // row of three 120 mm positions), drawn where it sits.
+        return { pos: new THREE.Vector3(x > 0.08 ? x : 0, y, z), normal: new THREE.Vector3(-1, 0, 0) };
       case "rear":
-        return { pos: new THREE.Vector3(D, y, z), normal: new THREE.Vector3(1, 0, 0) };
+        // Existing cases set x equal to the depth, so they stay on the rear skin.
+        // A smaller x is the RM52 I/O panel, ahead of the external 80 mm cage.
+        return { pos: new THREE.Vector3(x > 0 ? x : D, y, z), normal: new THREE.Vector3(1, 0, 0) };
       case "top":
         return { pos: new THREE.Vector3(x, H, z), normal: new THREE.Vector3(0, 1, 0) };
       case "bottom":
