@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=80727f0a0d-e1e38c70";
-import { renderNetwork } from "./network.js?v=80727f0a0d-e1e38c70";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=80727f0a0d-e1e38c70";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=84c036cb11-9d45e0eb";
+import { renderNetwork } from "./network.js?v=84c036cb11-9d45e0eb";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=84c036cb11-9d45e0eb";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -221,6 +221,15 @@ function showLoadError(text) {
 
 const STOCK_FANS = {
   "silverstone-rm52": {
+    // Chosen default, not a fan the RM52 includes. The case ships the six 120 mm
+    // mounts empty. NF-P12 redux-1700 is the highest-airflow 120 mm in the library
+    // with a published P–Q table.
+    "front-1": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
+    "front-2": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
+    "front-3": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
+    "front-4": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
+    "front-5": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
+    "front-6": { fan: "noctua-nf-p12-redux-1700", state: "fan", direction: "intake" },
     "rear-140": { fan: "silverstone-rm52-included-140", state: "fan", direction: "exhaust" },
     "rear-80-1": { fan: "silverstone-rm52-included-80", state: "fan", direction: "exhaust" },
     "rear-80-2": { fan: "silverstone-rm52-included-80", state: "fan", direction: "exhaust" },
@@ -244,7 +253,7 @@ function scratch(caseId) {
         panel: m.panel,
         size_mm: m.size_mm,
         fan: preset?.fan || null,
-        state: preset?.state || (caseId === "silverstone-rm52" && m.panel === "front" ? "empty" : "blanked"),
+        state: preset?.state || "blanked",
         direction: preset?.direction || "intake",
         duty: 1,
       };
