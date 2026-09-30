@@ -44,6 +44,10 @@ function shortName(g) {
       return "Shroud fans";
     case "shroud-leak":
       return "Shroud leak";
+    case "shroud-pull":
+      return g.count > 1 ? `Gap into shroud ×${g.count}` : "Gap into shroud";
+    case "shroud-crack":
+      return g.count > 1 ? `Taped crack ×${g.count}` : "Taped crack";
     default:
       return g.kind;
   }
@@ -99,6 +103,10 @@ export function renderNetwork(el, ctx) {
         and step 1 is solved again until both settle.</p>
         <p>Flow-through cards blow their exhaust up into the card above. The share it swallows (the plume) comes from the
         jet speed, the case crossflow and entrainment; touching cards also share a direct duct.</p>
+        <p>With the rear shroud on, each interior gap between cards is its own orifice into the plenum (gap height × card
+        height, plus laminar friction along the card). That air cools the skins and bypasses the fins. Taped mode leaves
+        only a crack there, so the shroud pulls the GPU exhaust openings. The top of the top card and the bottom of the
+        bottom card are not shroud inlets. Shroud off removes those branches.</p>
       </details>
     </div>
     <div class="net-legend">${legend()}</div>
@@ -230,7 +238,7 @@ function airflowSvg(sol) {
     if (!a || !b) return;
     if (g.kind === "spill") {
       out.push(labelled(g, [a, { x: a.x, y: pos.case.y }, b], 1, shortName(g)));
-    } else if (g.kind === "rear-slot" || g.kind === "reingest") {
+    } else if (g.kind === "rear-slot" || g.kind === "reingest" || g.kind === "shroud-pull" || g.kind === "shroud-crack") {
       const y = bottomLane();
       out.push(labelled(g, [a, { x: a.x, y }, { x: b.x, y }, b], 1, shortName(g)));
     } else if (g.kind === "cpu-cooler") {
@@ -330,7 +338,7 @@ function thermalRows(sol, fmt, names) {
         ${chip("zone air", d.t_zone_c, `GPU-zone air from layer 1: ${d.t_zone_c?.toFixed(2)} °C.`)}
         ${link(plume, `Inlet air = zone air${d.plume_from ? `, ${Math.round(d.plume_share_of_intake * 100)} % of it replaced by exhaust from the card below at ${d.plume_source_temp_c?.toFixed(1)} °C` : ""}, plus ${d.inlet_heat_captured_w?.toFixed(1)} W from neighbouring backplates.`)}
         ${chip("inlet", tIn, `Air entering the fans: ${tIn?.toFixed(2)} °C.`)}
-        ${link(rConv == null ? "no airflow" : `R<sub>conv</sub> ${rConv.toFixed(3)} K/W`, `Fins to air: R_conv = 1/(ε·ṁ·c_p) = 1/(${d.epsilon?.toFixed(2)} × ${((d.mass_kg_s || 0) * 1000).toFixed(1)} g/s × 1007) = ${rConv?.toFixed(3)} K/W, carrying ${d.q_channel_w?.toFixed(0)} W. ṁ comes from layer 1 (${c.flow_cfm.toFixed(1)} CFM). A parallel ${d.r_ext_k_per_w?.toFixed(1)} K/W path sheds ${d.q_ext_w?.toFixed(1)} W off the shroud and backplate.`)}
+        ${link(rConv == null ? "no airflow" : `R<sub>conv</sub> ${rConv.toFixed(3)} K/W`, `Fins to air: R_conv = 1/(ε·ṁ·c_p) = 1/(${d.epsilon?.toFixed(2)} × ${((d.mass_kg_s || 0) * 1000).toFixed(1)} g/s × 1007) = ${rConv?.toFixed(3)} K/W, carrying ${d.q_channel_w?.toFixed(0)} W. ṁ is the through-fin flow from layer 1 (${c.flow_cfm.toFixed(1)} CFM).` + (d.q_skin_w ? ` Skins use the bypass on that face, ${d.bypass_cfm?.toFixed(1)} CFM at h ${d.skin_h_w_m2k?.toFixed(1)} W/m²K, ${d.q_skin_w?.toFixed(1)} W — not the fin flow.` : ` A parallel ${d.r_ext_k_per_w?.toFixed(1)} K/W path sheds ${d.q_ext_w?.toFixed(1)} W off the shell.`) + (d.q_couple_w ? ` Facing card: ${d.q_couple_w.toFixed(1)} W across the gap.` : ""))}
         ${chip("heatsink", d.t_heatsink_c, `Heatsink metal, ${d.t_heatsink_c?.toFixed(1)} °C.`)}
         ${link(`R<sub>tim</sub> ${d.r_tim_k_per_w} K/W`, `Die to heatsink (paste + spreading): ${d.r_tim_k_per_w} K/W carrying ${d.p_die_w?.toFixed(0)} W. Memory: ${d.r_mem_k_per_w} K/W, ${d.p_mem_w?.toFixed(0)} W → ${fmt(c.t_mem_c)}.`)}
         ${chip("die", d.t_die_c, `T_die = T_in + Q_fins·R_conv + P_die·R_tim = ${tIn?.toFixed(1)} + ${d.q_channel_w?.toFixed(0)}×${rConv?.toFixed(3)} + ${d.p_die_w?.toFixed(0)}×${d.r_tim_k_per_w} = ${d.t_die_c?.toFixed(1)} °C${c.throttle ? " (throttled result)" : ""}.`, "die")}

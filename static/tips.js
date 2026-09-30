@@ -61,6 +61,11 @@ export const TIPS = {
   shroud:
     "Rear exhaust shroud: a shared plenum over every GPU bracket outlet, outside the case. On = with its fans pulling suction in series " +
     "with the GPU blowers. Passive = the same duct with no fans. Off = bracket outlets see the room and a reingestion path.",
+  shroudIntake:
+    "Where the shroud is allowed to pull. Open plenum (orientation A): interior gaps between cards, top and bottom of each card except the " +
+    "top of the top card and the bottom of the bottom card, in parallel with the GPU exhaust openings. Air through a gap cools the skins and " +
+    "does not go through the fins. Taped (orientation B): those gaps are taped down to a crack, so the suction comes from the GPU mouths and " +
+    "the pressure across the coolers rises. Assumed crack 0.6 mm, not a measurement.",
   shroudFan: "Shroud fan model. Default is Stefano's 2× Noctua NF-A14 industrialPPC-3000 (datasheet 10.52 mmH₂O; web page 6.58; Monte Carlo spans both).",
   ambient: "Room air temperature in °C. Everything is solved in Celsius; °F is a display toggle.",
   altitude: "Altitude sets air density (barometric, isothermal). Thinner air carries less heat per CFM.",

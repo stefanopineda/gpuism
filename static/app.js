@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=e6b8122216-c827829c";
-import { renderNetwork } from "./network.js?v=e6b8122216-c827829c";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=e6b8122216-c827829c";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=ee2695b350-af9c0153";
+import { renderNetwork } from "./network.js?v=ee2695b350-af9c0153";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=ee2695b350-af9c0153";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -137,6 +137,7 @@ async function boot() {
   if (shared) pending = loadShared(shared);
   else if (demo === "mike-bradley" || demo === "mike") pending = loadBuild(QUICK.mike).then(() => startDemo("mike-bradley-demo"));
   else if (demo === "stefano") pending = loadBuild(QUICK.meshify).then(() => startDemo("stefano-demo"));
+  else if (demo === "shroud" || demo === "shroud-ab") pending = loadBuild(QUICK.meshify).then(() => startDemo("shroud-ab"));
   else if (template) pending = loadBuild(template);
   else if (start === "meshify") pending = loadBuild(QUICK.meshify);
   else if (start === "9000") pending = loadBuild("corsair-9000d-sample");
@@ -229,7 +230,7 @@ function scratch(caseId) {
     mounts: kase.mounts.map((m) => ({ id: m.id, panel: m.panel, size_mm: m.size_mm, fan: null, state: "blanked", direction: "intake", duty: 1 })),
     radiator: { model: null, panel: "top", direction: "exhaust", arrangement: "push", fan: "generic-120", fan_count: 3, fan_duty: 1 },
     cpu: { power_w: 150, cooling: "air", cooler_fan: "generic-140", cooler_fans: "both", cooler_airflow: "up", cooler_duty: 0.8 },
-    shroud: { mode: "off", fan: "noctua-nf-a14-ippc-3000", count: 2, duty: 1 },
+    shroud: { mode: "off", intake: "open", fan: "noctua-nf-a14-ippc-3000", count: 2, duty: 1 },
     seals: { ...DEFAULT_SEALS },
     filters: { front: "fine" },
     patterns: {},
@@ -537,7 +538,13 @@ function facePanel(face) {
     };
     out.push(el("label", { tip: TIPS.side }, "Side panel", side));
   }
-  if (face === "rear") out.push(selectField("Rear exhaust shroud", state.build.shroud, "mode", [["off", "off"], ["on", "on, with its fans"], ["passive", "passive duct, no fans"]], TIPS.shroud));
+  if (face === "rear") {
+    out.push(selectField("Rear exhaust shroud", state.build.shroud, "mode", [["off", "off"], ["on", "on, with its fans"], ["passive", "passive duct, no fans"]], TIPS.shroud));
+    if ((state.build.shroud.mode || "off") !== "off") {
+      state.build.shroud.intake = state.build.shroud.intake || "open";
+      out.push(selectField("Shroud suction", state.build.shroud, "intake", [["open", "open plenum — gaps around the cards"], ["taped", "taped — GPU exhaust openings only"]], TIPS.shroudIntake));
+    }
+  }
   if (RADIATOR_FACES.includes(face)) out.push(...radiatorControls(face));
 
   const sealKey = SEAL_FOR_FACE[face];
@@ -1372,6 +1379,7 @@ function worthRow(row, r, span) {
     ),
     worthBar(row, r.noise_floor_c, span),
     row.framing === "shroud_on" ? el("p", { class: "wr-frame" }, `Your shroud is worth ${signed(row.gain_c < 0 ? -row.gain_c : row.gain_c).replace(/^[+−]/, "")} on this build.`) : null,
+    row.framing === "shroud_ab" ? el("p", { class: "wr-frame" }, "Shroud A/B: printed open plenum versus stacked and taped. The number is the model, ahead of the live test.") : null,
     el("p", { class: "fine" }, `${row.detail} ${row.note || ""}`),
     el(
       "div",
