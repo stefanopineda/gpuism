@@ -9,8 +9,8 @@
  * lit ring on each fan (blue intake, red exhaust, amber internal) and a light
  * bar on each GPU in its die-temperature colour. No text is drawn over the
  * scene; hovering an object reports it instead. */
-import * as THREE from "./vendor/three.module.js?v=18446b6052-eb2af346";
-import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=18446b6052-eb2af346";
+import * as THREE from "./vendor/three.module.js?v=5ed9bab5a0-f50ff205";
+import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=5ed9bab5a0-f50ff205";
 import {
   CUE,
   MAT,
@@ -27,7 +27,7 @@ import {
   radiatorModel,
   tag,
   tube,
-} from "./parts.js?v=18446b6052-eb2af346";
+} from "./parts.js?v=5ed9bab5a0-f50ff205";
 
 const VIEWS = {
   front34: new THREE.Vector3(0.62, 0.38, 1.0),
@@ -196,6 +196,7 @@ export class CaseScene {
     this._shell();
     this._internals();
     this._mounts();
+    this._rm52Cage();
     this._radiator();
     this._gpus();
     this._shroud();
@@ -341,10 +342,20 @@ export class CaseScene {
 
   /* ASUS Pro WS WRX90E-SAGE SE, EEB 12 × 13 in: schematic placement. */
   _board() {
-    const { H, D } = this._dims();
+    const { H } = this._dims();
+    const rear = this._bracketX();
     const height = Math.min(0.35, H - 0.1);
-    const depth = Math.min(0.33, D - 0.08);
-    return { top: H - 0.025, height, depth, rear: D - 0.012 };
+    const depth = Math.min(0.33, rear - 0.04);
+    return { top: H - 0.025, height, depth, rear };
+  }
+
+  /* Expansion-slot brackets. Other cases put them on the rear skin. The RM52's
+   * published 605 mm depth includes a 45 mm external fan cage; the brackets are
+   * on the main rear panel at 560 mm, and the cage is the empty box behind them. */
+  _bracketX() {
+    const { D } = this._dims();
+    if (this.ctx.kase.id === "silverstone-rm52") return 0.56;
+    return D - 0.012;
   }
 
   /* Slot 1 sits below the socket with room for a ~165 mm tower cooler, about
@@ -368,7 +379,8 @@ export class CaseScene {
         return { pos: new THREE.Vector3(x > 0.08 ? x : 0, y, z), normal: new THREE.Vector3(-1, 0, 0) };
       case "rear":
         // Existing cases set x equal to the depth, so they stay on the rear skin.
-        // A smaller x is the RM52 I/O panel, ahead of the external 80 mm cage.
+        // A smaller x is the RM52 I/O panel, ahead of the external cage. The
+        // rotor itself is parked on the cage's outer face in _mounts.
         return { pos: new THREE.Vector3(x > 0 ? x : D, y, z), normal: new THREE.Vector3(1, 0, 0) };
       case "top":
         return { pos: new THREE.Vector3(x, H, z), normal: new THREE.Vector3(0, 1, 0) };
@@ -379,6 +391,39 @@ export class CaseScene {
       default:
         return { pos: new THREE.Vector3(x, y, z), normal: new THREE.Vector3(1, 0, 0) };
     }
+  }
+
+  /* The RM52's external 80 mm cage: a 45 mm box on the main rear panel, behind
+   * the slot brackets, covering the card exhaust. The two included 80 mm fans
+   * mount on its outer face. */
+  _rm52Cage() {
+    if (this.ctx.kase.id !== "silverstone-rm52") return;
+    const x0 = 0.562;
+    const x1 = 0.605;
+    const y0 = 0.07;
+    const y1 = 0.246;
+    const z0 = 0.028;
+    const z1 = 0.124;
+    const rail = 0.006;
+    const g = new THREE.Group();
+    const beam = (sx, sy, sz, x, y, z) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), MAT.steelMid);
+      b.position.set(x, y, z);
+      g.add(b);
+    };
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const cz = (z0 + z1) / 2;
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dz = z1 - z0;
+    for (const y of [y0, y1]) for (const z of [z0, z1]) beam(dx, rail, rail, cx, y, z);
+    for (const x of [x0, x1]) for (const z of [z0, z1]) beam(rail, dy, rail, x, cy, z);
+    for (const x of [x0, x1]) for (const y of [y0, y1]) beam(rail, rail, dz, x, y, cz);
+    this._add(g, {
+      kind: "part",
+      tip: "Rear fan cage: 45 mm external box behind the slot brackets, two 80 mm exhausts on the outer face",
+    });
   }
 
   /* A real fan on a panel. `normal` points out of the case. The motor struts
@@ -411,7 +456,17 @@ export class CaseScene {
       const ud = { kind: "fan", id: mount.id, panel: layout.panel, tip };
       let obj;
       if (mount.state === "fan") {
-        obj = this._caseFan(pos.clone().addScaledVector(normal, -0.0155), normal, size * 0.98, mount.direction, fan, ud);
+        // Other cases sink the rotor one frame-depth inside the skin. On the RM52
+        // the same pull puts the rear I/O fan inside the card length, so from the
+        // glass it reads as a wall across the heatsinks. Rear rotors stay on the
+        // outer face of the cage, behind the 560 mm brackets.
+        let center = pos.clone().addScaledVector(normal, -0.0155);
+        if (kase.id === "silverstone-rm52" && layout.panel === "rear") {
+          // 25 mm rotor, outer face flush with the 605 mm cage back.
+          center = pos.clone();
+          center.x = 0.592;
+        }
+        obj = this._caseFan(center, normal, size * 0.98, mount.direction, fan, ud);
       } else {
         obj = mount.state === "empty" ? openHole(size) : coverPlate(size);
         orient(obj, normal);
@@ -502,7 +557,7 @@ export class CaseScene {
 
   cardBox(gpu, card) {
     const kase = this.ctx.kase;
-    const { W, D } = this._dims();
+    const { W } = this._dims();
     const L = m(card?.length_mm || 267);
     const T = m(card?.thickness_mm || 37);
     const Hc = m(card?.height_mm || 111);
@@ -517,7 +572,7 @@ export class CaseScene {
       const y = this.slotY(Math.min(4, kase.horizontal_slots)) - Hc / 2 + 0.03;
       return {
         vertical: true,
-        center: new THREE.Vector3(D - 0.012 - L / 2, y, z),
+        center: new THREE.Vector3(this._bracketX() - L / 2, y, z),
         size: [L, Hc, T],
         fanNormal: new THREE.Vector3(0, 0, 1),
         exhaustNormal: new THREE.Vector3(0, 0, -1),
@@ -528,7 +583,7 @@ export class CaseScene {
     const ySlot = this.slotY(s) + 0.008;
     return {
       vertical: false,
-      center: new THREE.Vector3(D - 0.012 - L / 2, ySlot - T / 2, 0.02 + Hc / 2),
+      center: new THREE.Vector3(this._bracketX() - L / 2, ySlot - T / 2, 0.02 + Hc / 2),
       size: [L, T, Hc],
       fanNormal: new THREE.Vector3(0, -1, 0),
       exhaustNormal: new THREE.Vector3(0, 1, 0),
