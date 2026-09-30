@@ -90,23 +90,26 @@ export function renderNetwork(el, ctx) {
   el.innerHTML = `
     <div class="net-head">
       <h2>How the number is made</h2>
-      <p><b>1 · Airflow:</b> fans push air through resistances (pressure ≈ voltage, flow ≈ current).
-      <b>2 · Heat:</b> each card's heat crosses thermal resistances into the air from step 1.
-      The two are solved together. <span class="hint">Hover any part for its numbers and assumptions.</span></p>
-      <details class="net-more"><summary>How it works</summary>
-        <p>Every airflow branch obeys <code>ΔP = k·Q·|Q|</code>; an opening's <code>k = ρ / (2 C<sub>d</sub>² A²)</code>.
-        A fan adds pressure along its curve, scaled by speed (<code>Q ∝ N</code>, <code>P ∝ N²</code>), and works against the
-        pressure it sees. Air mass balances at every node (Kirchhoff's current law).</p>
-        <p>For heat, the air flow through each card's fins sets <code>R_conv = 1 / (ε·ṁ·c<sub>p</sub>)</code>
-        (ε-NTU, <code>Nu = C·Re<sup>m</sup>·Pr<sup>1/3</sup></code>). Then
-        <code>T_die = T_inlet + Q_fins·R_conv + P_die·R_tim</code>. Temperatures set each GPU fan's speed and the air density,
-        and step 1 is solved again until both settle.</p>
-        <p>Flow-through cards blow their exhaust up into the card above. The share it swallows (the plume) comes from the
-        jet speed, the case crossflow and entrainment; touching cards also share a direct duct.</p>
-        <p>With the rear shroud on, each interior gap between cards is its own orifice into the plenum (gap height × card
-        height, plus laminar friction along the card). That air cools the skins and bypasses the fins. Taped mode leaves
-        only a crack there, so the shroud pulls the GPU exhaust openings. The top of the top card and the bottom of the
-        bottom card are not shroud inlets. Shroud off removes those branches.</p>
+      <p class="net-solve">Edges are resistors between nodes. Air: <code>ΔP = k·Q·|Q|</code>, plus a fan's curve; the node pressures are solved so mass balances everywhere. That flow sets each GPU's convection coefficient, <code>h = Nu·k<sub>air</sub>/D<sub>h</sub></code> with <code>Nu = C·Re<sup>m</sup>·Pr<sup>1/3</sup></code>, and <code>R<sub>conv</sub> = 1/(ε·ṁ·c<sub>p</sub>)</code>. Heat: <code>T<sub>die</sub> = T<sub>in</sub> + Q<sub>fins</sub>·R<sub>conv</sub> + P<sub>die</sub>·R<sub>tim</sub></code>. Temperature updates fan speed and density, and both networks are solved again until they agree.</p>
+      <p class="net-assume-label">This is solved by assuming</p>
+      <ul class="net-assume">
+        <li>Steady state: one pressure and one temperature at each node.</li>
+        <li>An opening has <code>k = ρ/(2 C<sub>d</sub>² A²)</code>. Seal level is the open fraction; level 5 is a wall (R = ∞).</li>
+        <li>Fan speed scales the curve by <code>Q ∝ N</code> and <code>P ∝ N²</code>. Two published intercepts are filled in as a parabola.</li>
+        <li><code>C</code> and <code>m</code> in the Nusselt number, and <code>R<sub>tim</sub></code>, are global or per card type.</li>
+        <li>A flow-through plume's share comes from jet speed, crossflow, and entrainment α = 0.08.</li>
+        <li>Touching flow-through cards share one series duct.</li>
+        <li>Rear-shroud inlets are the interior gaps; taped mode leaves a crack.</li>
+        <li>Obstruction and cable clutter multiply <code>k</code> on the internal edges.</li>
+      </ul>
+      <details class="net-more"><summary>More detail</summary>
+        <ul>
+          <li>Air unknown: gauge pressure at each node (room = 0). Each edge is <code>P<sub>a</sub> − P<sub>b</sub> = k·Q·|Q| − P<sub>fan</sub>(Q)</code>. A damped Newton solve enforces mass balance.</li>
+          <li>Fin effectiveness is ε-NTU, <code>ε = 1 − exp(−hA / ṁ c<sub>p</sub>)</code>, which is the same <code>R<sub>conv</sub></code> above. A parallel shell path uses <code>R<sub>ext</sub></code>. Skin convection uses the bypass in that gap, with its own <code>h</code>.</li>
+          <li>Flow-through exhaust leaves upward into the case. The card above draws part of that jet. The up-exit stays out of the GPU zone so the heat is carried away with the case flow.</li>
+          <li>Shroud on: each interior gap is an orifice (gap × card height) plus laminar friction along the card. That air cools the skins and skips the fins. Tape leaves the crack, and the shroud pulls the GPU exhaust openings. The outer faces of the stack sit outside the shroud. Shroud off removes those edges.</li>
+          <li>Hover any edge for its <code>k</code>, flow, and ΔP. The tables under the diagram list every edge and the per-card sum.</li>
+        </ul>
       </details>
     </div>
     <div class="net-legend">${legend()}</div>
