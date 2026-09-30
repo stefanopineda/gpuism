@@ -3,9 +3,10 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=5ed9bab5a0-f50ff205";
-import { renderNetwork } from "./network.js?v=5ed9bab5a0-f50ff205";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=5ed9bab5a0-f50ff205";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=0e630ccea8-a2ae7e58";
+import { renderNetwork } from "./network.js?v=0e630ccea8-a2ae7e58";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=0e630ccea8-a2ae7e58";
+import { flush as usageFlush, installUsage, touchSurface, track } from "./usage.js?v=0e630ccea8-a2ae7e58";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -89,25 +90,41 @@ function orderedGpus() {
 /* ------------------------------------------------------------------ boot */
 
 async function boot() {
+  installUsage(() => ({
+    inApp: !$("app").classList.contains("hidden"),
+    phone: isNarrow(),
+    tab: state.mtab,
+    view: state.net,
+    worth: state.face === "worth",
+  }));
   installTips($("tip"));
   state.presets = await (await fetch("/api/presets")).json();
   applyStaticTips();
   buildStartScreen();
   $("home").onclick = () => {
+    touchSurface();
     stopDemo();
     history.replaceState(null, "", location.pathname + location.search);
     $("app").classList.add("hidden");
     $("start").classList.remove("hidden");
   };
-  document.querySelectorAll("#facebar button").forEach((b) => (b.onclick = () => setFace(b.dataset.face)));
+  document.querySelectorAll("#facebar button").forEach((b) => (b.onclick = () => {
+    setFace(b.dataset.face);
+    if (b.dataset.face === "worth") track("tab", { tab: "worth" });
+  }));
   document.querySelectorAll("[data-view]").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
-  document.querySelectorAll("[data-net]").forEach((b) => (b.onclick = () => setNet(b.dataset.net)));
+  document.querySelectorAll("[data-net]").forEach((b) => (b.onclick = () => {
+    setNet(b.dataset.net);
+    const tab = b.dataset.net === "split" ? "view_split" : b.dataset.net === "full" ? "network" : "case";
+    track("tab", { tab });
+  }));
   document.querySelectorAll("[data-mtab]").forEach((b) => (b.onclick = () => setMobileTab(b.dataset.mtab)));
   syncMobileChrome();
   window.matchMedia("(max-width: 800px)").addEventListener("change", syncMobileChrome);
   $("unit-toggle").onclick = () => {
     state.unitF = !state.unitF;
     $("unit-toggle").textContent = state.unitF ? "°C" : "°F";
+    track("unit", { unit: state.unitF ? "F" : "C" });
     renderResults();
   };
   $("present-toggle").onclick = () => document.body.classList.toggle("present");
@@ -121,6 +138,7 @@ async function boot() {
   $("worth-open").onclick = () => {
     setFace("worth");
     if (document.body.classList.contains("is-mobile")) setMobileTab("worth");
+    else track("tab", { tab: "worth" });
   };
   $("share-link").onclick = copyShareLink;
   window.addEventListener("keydown", onKey);
@@ -135,15 +153,15 @@ async function boot() {
   let pending = null;
   const shared = location.hash.startsWith("#b=") ? location.hash.slice(3) : null;
   if (shared) pending = loadShared(shared);
-  else if (demo === "mike-bradley" || demo === "mike") pending = loadBuild(QUICK.mike).then(() => startDemo("mike-bradley-demo"));
-  else if (demo === "stefano") pending = loadBuild(QUICK.meshify).then(() => startDemo("stefano-demo"));
-  else if (demo === "shroud" || demo === "shroud-ab") pending = loadBuild(QUICK.meshify).then(() => startDemo("shroud-ab"));
-  else if (template) pending = loadBuild(template);
-  else if (start === "meshify") pending = loadBuild(QUICK.meshify);
-  else if (start === "9000") pending = loadBuild("corsair-9000d-sample");
-  else if (start === "mike" || start === "mock") pending = loadBuild(QUICK.mike);
+  else if (demo === "mike-bradley" || demo === "mike") pending = loadBuild(QUICK.mike, "demo").then(() => startDemo("mike-bradley-demo"));
+  else if (demo === "stefano") pending = loadBuild(QUICK.meshify, "demo").then(() => startDemo("stefano-demo"));
+  else if (demo === "shroud" || demo === "shroud-ab") pending = loadBuild(QUICK.meshify, "demo").then(() => startDemo("shroud-ab"));
+  else if (template) pending = loadBuild(template, "url");
+  else if (start === "meshify") pending = loadBuild(QUICK.meshify, "url");
+  else if (start === "9000") pending = loadBuild("corsair-9000d-sample", "url");
+  else if (start === "mike" || start === "mock") pending = loadBuild(QUICK.mike, "url");
   if (pending && demo === "1") pending.then(() => startDemo());
-  if (pending && params.get("view")) pending.then(() => setView(params.get("view")));
+  if (pending && params.get("view")) pending.then(() => setView(params.get("view"), true));
 }
 
 function applyStaticTips() {
@@ -163,8 +181,8 @@ function applyStaticTips() {
 function buildStartScreen() {
   const mike = state.presets.builds.find((b) => b.id === QUICK.mike);
   if (mike) $("quick-mike-name").textContent = mike.name.split(" — ")[0];
-  $("quick-mike").onclick = () => loadBuild(QUICK.mike);
-  $("quick-meshify").onclick = () => loadBuild(QUICK.meshify);
+  $("quick-mike").onclick = () => loadBuild(QUICK.mike, "quick");
+  $("quick-meshify").onclick = () => loadBuild(QUICK.meshify, "quick");
   const grid = $("template-grid");
   grid.innerHTML = "";
   const order = ["silverstone-rm52-4x-maxq", "corsair-9000d-sample", "generic-atx-sample", "generic-matx-sample", "generic-eatx-sample", "phanteks-enthoo-sample"];
@@ -174,18 +192,22 @@ function buildStartScreen() {
     .forEach((b) => {
       const kase = state.presets.cases.find((c) => c.id === b.case);
       grid.append(
-        el("button", { type: "button", onclick: () => loadBuild(b.id), tip: b.notes }, el("b", {}, b.name), el("span", {}, `${kase ? kase.name : b.case} · ${kase ? kase.horizontal_slots : "?"} slots`)),
+        el("button", { type: "button", onclick: () => loadBuild(b.id, "template"), tip: b.notes }, el("b", {}, b.name), el("span", {}, `${kase ? kase.name : b.case} · ${kase ? kase.horizontal_slots : "?"} slots`)),
       );
     });
   const sel = $("scratch-case");
   sel.innerHTML = "";
   state.presets.cases.forEach((c) => sel.append(el("option", { value: c.id }, c.name)));
   sel.value = "generic-atx";
-  $("from-scratch").onclick = () => scratch(sel.value);
+  sel.dataset.control = "Scratch case";
+  $("from-scratch").onclick = () => {
+    track("case", { case: sel.value });
+    scratch(sel.value);
+  };
   fitPhoneSelects($("start"));
 }
 
-async function loadBuild(id) {
+async function loadBuild(id, source) {
   const res = await fetch(`/api/build/${id}`);
   if (!res.ok) {
     // Usually a server started before this build preset existed: the page is
@@ -199,6 +221,7 @@ async function loadBuild(id) {
     return;
   }
   state.build = await res.json();
+  track("preset", { id, source: source || "preset" });
   state.gaps = null;
   state.notice = null;
   enterApp();
@@ -372,6 +395,7 @@ function applyMobileClasses() {
 }
 
 function enterApp() {
+  touchSurface();
   $("start").classList.add("hidden");
   $("app").classList.remove("hidden");
   if (!state.scene) {
@@ -419,6 +443,7 @@ function enterApp() {
 /* ------------------------------------------------------------------ layout */
 
 function setFace(face) {
+  touchSurface();
   state.face = face;
   renderPanel();
   if (face === "worth") runWorth();
@@ -426,12 +451,15 @@ function setFace(face) {
   state.scene?.update(sceneCtx());
 }
 
-function setView(view) {
+function setView(view, quiet) {
   document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   state.scene?.setView(view);
+  const name = view === "front34" ? "front" : view === "rear34" ? "rear" : view === "side" ? "side" : "";
+  if (!quiet && name) track("view", { view: name });
 }
 
 function syncMobileChrome() {
+  touchSurface();
   const on = isNarrow();
   if (on && state.mtab === "split") state.mtab = "network";
   if (on && !state.mtabChosen) state.mtab = state.net === "full" || state.net === "split" ? "network" : state.mtab || "pc";
@@ -440,6 +468,7 @@ function syncMobileChrome() {
 }
 
 function setMobileTab(tab) {
+  touchSurface();
   if (isNarrow() && tab === "split") tab = "network";
   state.mtab = tab;
   state.mtabChosen = true;
@@ -448,6 +477,7 @@ function setMobileTab(tab) {
   else setNet("off");
   if (tab === "worth" && state.face !== "worth") setFace("worth");
   if (tab === "customize" && state.face === "worth") setFace("case");
+  track("tab", { tab: tab === "network" ? "resistor" : tab });
   applyMobileClasses();
   relayoutScene();
 }
@@ -475,6 +505,7 @@ function renderMobileTemps() {
 }
 
 function setNet(mode, quiet) {
+  touchSurface();
   if (!["off", "split", "full"].includes(mode)) return;
   if (mode === "split" && isNarrow()) {
     mode = "full";
@@ -534,7 +565,7 @@ function casePanel() {
   ];
   out.push(el("ul", { class: "fine" }, facts.map((f) => el("li", {}, f))));
   const tpl = el("select", { tip: "Replace the whole build with a saved one." }, el("option", { value: "" }, "Load a saved build…"), state.presets.builds.map((x) => el("option", { value: x.id }, x.name)));
-  tpl.onchange = () => tpl.value && loadBuild(tpl.value);
+  tpl.onchange = () => tpl.value && loadBuild(tpl.value, "preset");
   out.push(el("label", {}, "Saved builds", tpl));
   out.push(el("div", { class: "row" }, numberField("Room °C", b, "ambient_c", TIPS.ambient, { step: 0.5 }), numberField("Altitude m", b, "altitude_m", TIPS.altitude, { step: 50 })));
   return out;
@@ -626,7 +657,7 @@ function facePanel(face) {
 
     const individual = el("details", { open: !uniform && withFans.length > 0 }, el("summary", {}, "Not all the same? Set fans one by one"));
     fanMounts.forEach((m, i) => {
-      const sel = el("select", { tip: TIPS.fanSelect });
+      const sel = el("select", { tip: TIPS.fanSelect, "data-control": `${cap(face)} fan ${i + 1}` });
       sel.append(el("option", { value: "__blanked" }, "cover plate (plugged)"), el("option", { value: "__empty" }, "open hole, no fan"));
       topFans(m.size_mm).forEach((f) => sel.append(el("option", { value: f.id }, fanLabel(f))));
       sel.value = m.state === "fan" && m.fan ? m.fan : m.state === "empty" ? "__empty" : "__blanked";
@@ -735,7 +766,7 @@ function checkbox(label, key, tip, obj = state.build, after) {
 }
 
 function selectField(label, obj, key, options, tip, after) {
-  const sel = el("select", { tip }, options.map(([v, t]) => el("option", { value: v }, t)));
+  const sel = el("select", { tip, "data-control": label }, options.map(([v, t]) => el("option", { value: v }, t)));
   sel.value = obj[key] ?? options[0][0];
   sel.onchange = () => {
     obj[key] = sel.value;
@@ -917,7 +948,7 @@ function gpusPanel() {
   const vertical = orderedGpus().filter((g) => isVertical(g.slot)).length;
   if (vertical) out.push(el("p", { class: "fine" }, `${vertical} card${vertical > 1 ? "s" : ""} on a vertical mount: ${vertical > 1 ? "they don't" : "it doesn't"} fit in the horizontal slots at this spacing.`));
   if (state.notice) out.push(el("p", { class: "fine warn" }, state.notice));
-  const curve = el("select", { tip: TIPS.curve }, [el("option", { value: "" }, "Mixed / custom — set each card below"), el("option", { value: "stock" }, "Stock"), el("option", { value: "custom_accelerated" }, "Custom Accelerated (0 % @ 25 °C → 100 % @ 70 °C)")]);
+  const curve = el("select", { tip: TIPS.curve, "data-control": "GPU fan curve" }, [el("option", { value: "" }, "Mixed / custom — set each card below"), el("option", { value: "stock" }, "Stock"), el("option", { value: "custom_accelerated" }, "Custom Accelerated (0 % @ 25 °C → 100 % @ 70 °C)")]);
   const curves = new Set(b.gpus.map((g) => g.fan_curve));
   curve.value = curves.size === 1 && [...curves][0] !== "custom" ? [...curves][0] : "";
   curve.onchange = () => {
@@ -934,7 +965,7 @@ function gpusPanel() {
   const each = el("details", {}, el("summary", {}, "Set each card: model, slot, power, curve, clocks"));
   orderedGpus().forEach((g, index) => {
     const res = results[g.id];
-    const one = el("select", { tip: TIPS.card }, group("Blower", blowers), group("Flow-through", through));
+    const one = el("select", { tip: TIPS.card, "data-control": `GPU ${index + 1} card` }, group("Blower", blowers), group("Flow-through", through));
     one.value = g.card;
     one.onchange = () => {
       g.card = one.value;
@@ -1353,6 +1384,7 @@ function onKey(ev) {
 }
 
 async function runOptimal() {
+  if (state.build) track("optimize", { case: state.build.case, cards: state.build.gpus.length });
   const btn = $("opt-run");
   btn.textContent = "Searching…";
   try {
@@ -1490,7 +1522,7 @@ function worthRow(row, r, span) {
   const testing = state.worth.test === row.id;
   return el(
     "div",
-    { class: `worth-row ${cls}` },
+    { class: `worth-row ${cls}`, "data-usage-worth": row.id },
     el("div", { class: "wr-head" }, el("b", {}, row.title), el("span", { class: `effort e-${row.effort}` }, row.effort_label)),
     el(
       "div",
@@ -1664,6 +1696,7 @@ async function loadShared(text) {
 
 async function copyShareLink() {
   if (!state.build) return;
+  track("copy_link");
   const url = `${location.origin}${location.pathname}#b=${await encodeBuild(state.build)}`;
   try {
     await navigator.clipboard.writeText(url);
@@ -1688,6 +1721,6 @@ function toast(text, extra) {
 }
 
 // Handle for scripted checks (headless screenshots, OBS macros). Not an API.
-window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow, runWorth, copyShareLink, encodeBuild, fitPhoneSelects };
+window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow, runWorth, copyShareLink, encodeBuild, fitPhoneSelects, usageFlush };
 
 boot();

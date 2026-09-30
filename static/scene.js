@@ -9,8 +9,8 @@
  * lit ring on each fan (blue intake, red exhaust, amber internal) and a light
  * bar on each GPU in its die-temperature colour. No text is drawn over the
  * scene; hovering an object reports it instead. */
-import * as THREE from "./vendor/three.module.js?v=5ed9bab5a0-f50ff205";
-import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=5ed9bab5a0-f50ff205";
+import * as THREE from "./vendor/three.module.js?v=0e630ccea8-a2ae7e58";
+import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=0e630ccea8-a2ae7e58";
 import {
   CUE,
   MAT,
@@ -27,7 +27,7 @@ import {
   radiatorModel,
   tag,
   tube,
-} from "./parts.js?v=5ed9bab5a0-f50ff205";
+} from "./parts.js?v=0e630ccea8-a2ae7e58";
 
 const VIEWS = {
   front34: new THREE.Vector3(0.62, 0.38, 1.0),
