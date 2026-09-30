@@ -3,7 +3,7 @@
  * events stay in localStorage so /usage/ can still show this browser.
  * No third-party tracker. No names, emails, IPs, query strings, or link hashes.
  * Keep event names and dwell buckets aligned with gpusim/usage.py. */
-import { addEvent, loadStoredSummary, saveStoredSummary } from "./usage-report.js?v=0e630ccea8-a2ae7e58";
+import { addEvent, loadStoredSummary, saveStoredSummary } from "./usage-report.js?v=cf4e787219-1759a639";
 
 const HOSTS = new Set(["gpuism.com", "www.gpuism.com", "stefanopineda.github.io", "localhost", "127.0.0.1"]);
 const SID_KEY = "gpusim-usage-sid";

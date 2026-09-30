@@ -9,8 +9,8 @@
  * lit ring on each fan (blue intake, red exhaust, amber internal) and a light
  * bar on each GPU in its die-temperature colour. No text is drawn over the
  * scene; hovering an object reports it instead. */
-import * as THREE from "./vendor/three.module.js?v=0e630ccea8-a2ae7e58";
-import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=0e630ccea8-a2ae7e58";
+import * as THREE from "./vendor/three.module.js?v=cf4e787219-1759a639";
+import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=cf4e787219-1759a639";
 import {
   CUE,
   MAT,
@@ -27,7 +27,7 @@ import {
   radiatorModel,
   tag,
   tube,
-} from "./parts.js?v=0e630ccea8-a2ae7e58";
+} from "./parts.js?v=cf4e787219-1759a639";
 
 const VIEWS = {
   front34: new THREE.Vector3(0.62, 0.38, 1.0),
@@ -287,25 +287,45 @@ export class CaseScene {
     const { build, kase } = this.ctx;
     const { W, H, D } = this._dims();
     const board = this._board();
-    const slots = Math.min(7, kase.horizontal_slots);
+    // The EEB drawing has seven connectors. An ATX case draws every slot it has.
+    const slots = board.atx ? kase.horizontal_slots : Math.min(7, kase.horizontal_slots);
     const slotYs = [];
     for (let s = 1; s <= slots; s += 1) slotYs.push(this.slotY(s) + 0.004);
     this._add(motherboardModel({ ...board, slotYs }), {
       kind: "part",
-      tip: "Motherboard: ASUS Pro WS WRX90E-SAGE SE layout (EEB 12 × 13 in, sTR5 socket, 8 DIMM slots, 7 PCIe 5.0 x16). Proportions, not a drawing.",
+      tip: board.atx
+        ? `Motherboard: ATX 12 × 9.6 in (305 × 244 mm), ${kase.horizontal_slots} PCIe slots at ${kase.slot_pitch_mm} mm pitch. Proportions from the ATX spec, not a board photo.`
+        : "Motherboard: ASUS Pro WS WRX90E-SAGE SE layout (EEB 12 × 13 in, sTR5 socket, 8 DIMM slots, 7 PCIe 5.0 x16). Proportions, not a drawing.",
     });
+    if (board.atx) {
+      const lips = new THREE.Group();
+      for (let s = 1; s <= kase.horizontal_slots; s += 1) {
+        const lip = new THREE.Mesh(new THREE.BoxGeometry(0.0016, 0.014, 0.09), MAT.nickel);
+        lip.position.set(this._bracketX() + 0.001, this.slotY(s), 0.055);
+        lips.add(lip);
+      }
+      this._add(lips, {
+        kind: "part",
+        tip: `${kase.horizontal_slots} bridgeless expansion slots at ${kase.slot_pitch_mm} mm pitch`,
+      });
+    }
 
-    // Socket, RAM and CPU cooler.
-    const sx = board.rear - board.depth * 0.46;
-    const sy = board.top - 0.085;
+    // Socket, RAM and CPU cooler. On ATX the socket sits in the upper board,
+    // lined up with the rear exhaust and above slot 1.
+    const sx = board.rear - board.depth * (board.atx ? 0.42 : 0.46);
+    const sy = board.top - (board.atx ? 0.055 : 0.085);
     this.socket = new THREE.Vector3(sx, sy, 0.01);
     const cpu = build.cpu || { cooling: "water", power_w: 150 };
     const upward = (cpu.cooler_airflow || "up") === "up";
     const fans = cpu.cooler_fans || "both";
-    const cooler = cpuAreaModel({ cooling: cpu.cooling, fans, upward, cue: CUE.internal });
+    const cooler = cpuAreaModel({ cooling: cpu.cooling, fans, upward, cue: CUE.internal, atx: !!board.atx });
     cooler.position.copy(this.socket);
-    const tip =
-      cpu.cooling === "air"
+    const tip = board.atx
+      ? cpu.cooling === "air"
+        ? `CPU tower, ${Math.round(cpu.power_w)} W into the case air, blowing ${upward ? "up" : "toward the rear"}` +
+          `${fans === "both" ? ", push-pull pair" : `, ${fans} fan only`}. Inside the case's ${kase.cpu_cooler_max_mm ?? 169} mm cooler limit.`
+        : `AIO pump on the CPU, ${Math.round(cpu.power_w)} W to the radiator.`
+      : cpu.cooling === "air"
         ? `CPU tower cooler, ${Math.round(cpu.power_w)} W into the case air, blowing ${upward ? "up" : "toward the rear"}` +
           `${fans === "both" ? ", push-pull pair" : `, ${fans} fan only`}. sTR5 socket, 8 DDR5 RDIMMs.`
         : `AIO pump on the CPU, ${Math.round(cpu.power_w)} W to the radiator. sTR5 socket, 8 DDR5 RDIMMs.`;
@@ -340,13 +360,17 @@ export class CaseScene {
     }
   }
 
-  /* ASUS Pro WS WRX90E-SAGE SE, EEB 12 × 13 in: schematic placement. */
+  /* ASUS Pro WS WRX90E-SAGE SE, EEB 12 × 13 in: schematic placement.
+   * Meshify 2 Compact is ATX only: 12 in along the connector edge, 9.6 in deep. */
   _board() {
     const { H } = this._dims();
     const rear = this._bracketX();
+    if (this.ctx.kase.id === "meshify2-compact") {
+      return { top: H - 0.025, height: 0.3048, depth: 0.24384, rear, atx: true };
+    }
     const height = Math.min(0.35, H - 0.1);
     const depth = Math.min(0.33, rear - 0.04);
-    return { top: H - 0.025, height, depth, rear };
+    return { top: H - 0.025, height, depth, rear, atx: false };
   }
 
   /* Expansion-slot brackets. Other cases put them on the rear skin. The RM52's
@@ -358,11 +382,12 @@ export class CaseScene {
     return D - 0.012;
   }
 
-  /* Slot 1 sits below the socket with room for a ~165 mm tower cooler, about
-   * 185 mm under the board's top edge; the board runs on below slot 7. */
+  /* On the EEB board, slot 1 sits about 185 mm under the board's top edge so
+   * a ~165 mm tower cooler clears it; that clamp is not used for an ATX case,
+   * whose slot 1 is the cited top_slot_y_mm. */
   slotY(s) {
     const k = this.ctx.kase;
-    const slot1 = Math.min(m(k.top_slot_y_mm), this._board().top - 0.185);
+    const slot1 = k.id === "meshify2-compact" ? m(k.top_slot_y_mm) : Math.min(m(k.top_slot_y_mm), this._board().top - 0.185);
     return slot1 - (s - 1) * m(k.slot_pitch_mm);
   }
 

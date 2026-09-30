@@ -2,7 +2,7 @@
  * downloaded meshes): PBR materials, canvas textures, and real part
  * proportions. Colour is used only as a cue — a lit ring on each fan for
  * intake / exhaust / internal, and a temperature light bar on each GPU. */
-import * as THREE from "./vendor/three.module.js?v=0e630ccea8-a2ae7e58";
+import * as THREE from "./vendor/three.module.js?v=cf4e787219-1759a639";
 
 const cache = new Map();
 /* Shared geometries, materials and textures are built once and flagged so the
@@ -625,30 +625,32 @@ export function gpuModel(card, { L, T, H, tempColor, topInletShare = 0 }) {
 
 /* ------------------------------------------------------------------ board, CPU */
 
-/* WRX90E-SAGE SE style board in case coordinates (metres): the PCB lies on
- * standoffs just off the tray, rear I/O at `rear`. */
-export function motherboardModel({ depth, height, top, rear, slotYs }) {
+/* Board in case coordinates (metres): the PCB lies on standoffs just off the
+ * tray, rear I/O at `rear`. `atx` is a 12 × 9.6 in ATX board. Otherwise the
+ * board is the WRX90E-SAGE SE style EEB layout. */
+export function motherboardModel({ depth, height, top, rear, slotYs, atx = false }) {
   const g = new THREE.Group();
   const cx = rear - depth / 2;
   const cy = top - height / 2;
   const pcb = box(depth, height, 0.0016, MAT.pcb);
   pcb.position.set(cx, cy, 0.009);
   g.add(pcb);
-  // Rear I/O shroud and VRM heatsinks along the top edge.
-  const io = box(0.03, 0.14, 0.032, MAT.aluDark);
-  io.position.set(rear - 0.02, top - 0.095, 0.026);
+  // Rear I/O shroud and VRM heatsinks along the top edge. The ATX aperture is
+  // 44 mm tall and stays above the slot stack.
+  const io = atx ? box(0.02, 0.044, 0.028, MAT.aluDark) : box(0.03, 0.14, 0.032, MAT.aluDark);
+  io.position.set(rear - (atx ? 0.012 : 0.02), top - (atx ? 0.03 : 0.095), atx ? 0.022 : 0.026);
   g.add(io);
-  const vrmTop = box(depth * 0.5, 0.024, 0.028, MAT.aluDark);
-  vrmTop.position.set(rear - depth * 0.46, top - 0.02, 0.024);
+  const vrmTop = atx ? box(depth * 0.55, 0.016, 0.014, MAT.aluDark) : box(depth * 0.5, 0.024, 0.028, MAT.aluDark);
+  vrmTop.position.set(rear - depth * (atx ? 0.42 : 0.46), top - (atx ? 0.014 : 0.02), atx ? 0.016 : 0.024);
   g.add(vrmTop);
   // Chipset and M.2 heatsinks in the lower board, clear of the PCIe slots.
   const chip = box(0.07, 0.07, 0.012, MAT.alu);
   chip.position.set(rear - depth + 0.06, top - height + 0.055, 0.016);
   g.add(chip);
   // 24-pin and EPS connectors on the front edge.
-  const atx = box(0.012, 0.052, 0.014, MAT.black);
-  atx.position.set(rear - depth + 0.008, top - 0.12, 0.017);
-  g.add(atx);
+  const power = box(0.012, 0.052, 0.014, MAT.black);
+  power.position.set(rear - depth + 0.008, top - 0.12, 0.017);
+  g.add(power);
   // PCIe x16 slots with steel armour.
   slotYs.forEach((y) => {
     const s = box(0.089, 0.0075, 0.011, MAT.black);
@@ -661,34 +663,50 @@ export function motherboardModel({ depth, height, top, rear, slotYs }) {
   return g;
 }
 
-/* sTR5 socket, eight DDR5 RDIMMs, and the cooler (tower or AIO pump). */
-export function cpuAreaModel({ cooling, fans, upward, cue }) {
+/* Socket, DIMMs, and the cooler (tower or AIO pump). `atx` is an LGA1700 /
+ * AM5 class socket with four DIMMs toward the front of the board and a tower
+ * that fits a 169 mm cooler limit. Otherwise it is the sTR5 / eight-RDIMM layout. */
+export function cpuAreaModel({ cooling, fans, upward, cue, atx = false }) {
   const g = new THREE.Group();
-  const ihs = box(0.072, 0.075, 0.006, MAT.nickel);
+  const ihs = box(atx ? 0.045 : 0.072, atx ? 0.045 : 0.075, atx ? 0.004 : 0.006, MAT.nickel);
   ihs.position.z = 0.004;
   g.add(ihs);
-  const frame = box(0.086, 0.09, 0.004, MAT.steelMid);
+  const frame = box(atx ? 0.054 : 0.086, atx ? 0.054 : 0.09, 0.004, MAT.steelMid);
   frame.position.z = 0.002;
   g.add(frame);
-  for (let k = 0; k < 4; k += 1) {
-    for (const side of [-1, 1]) {
-      const x = side * (0.06 + k * 0.0095);
-      const slot = box(0.0062, 0.14, 0.006, MAT.black);
+  if (atx) {
+    for (let k = 0; k < 4; k += 1) {
+      const x = -0.042 - k * 0.008;
+      const slot = box(0.005, 0.09, 0.005, MAT.black);
       slot.position.set(x, 0, 0.003);
       g.add(slot);
-      const stick = box(0.0045, 0.133, 0.031, MAT.steelMid);
-      stick.position.set(x, 0, 0.021);
+      const stick = box(0.004, 0.086, 0.028, MAT.steelMid);
+      stick.position.set(x, 0, 0.018);
       g.add(stick);
-      const top = box(0.0046, 0.128, 0.003, MAT.alu);
-      top.position.set(x, 0, 0.037);
-      g.add(top);
+    }
+  } else {
+    for (let k = 0; k < 4; k += 1) {
+      for (const side of [-1, 1]) {
+        const x = side * (0.06 + k * 0.0095);
+        const slot = box(0.0062, 0.14, 0.006, MAT.black);
+        slot.position.set(x, 0, 0.003);
+        g.add(slot);
+        const stick = box(0.0045, 0.133, 0.031, MAT.steelMid);
+        stick.position.set(x, 0, 0.021);
+        g.add(stick);
+        const top = box(0.0046, 0.128, 0.003, MAT.alu);
+        top.position.set(x, 0, 0.037);
+        g.add(top);
+      }
     }
   }
   if (cooling === "air") {
-    // NH-U14S TR5-SP6 class: fins 150 × 52 mm, 165 mm tall off the board.
-    const finsX = 0.15;
-    const finsY = 0.052;
-    const tall = 0.165;
+    // EEB: NH-U14S TR5-SP6 class, fins 150 × 52 mm, 165 mm off the board.
+    // ATX: a 120 mm tower, 155 mm off the board, inside a 169 mm cooler limit.
+    const finsX = atx ? 0.12 : 0.15;
+    const finsY = atx ? 0.028 : 0.052;
+    const tall = atx ? 0.155 : 0.165;
+    const fanD = atx ? 0.12 : 0.14;
     const base = box(0.07, 0.07, 0.012, MAT.nickel);
     base.position.z = 0.013;
     g.add(base);
@@ -716,7 +734,7 @@ export function cpuAreaModel({ cooling, fans, upward, cue }) {
     cover.position.z = tall + 0.004;
     g.add(cover);
     const fanAt = (sign) => {
-      const f = fanModel(0.14, { cue, style: "classic", depth: 0.025 });
+      const f = fanModel(fanD, { cue, style: "classic", depth: 0.025 });
       // Fan axis along ±Y (up) or ±X (rear), air moving the same way.
       const dir = upward ? new THREE.Vector3(0, sign, 0) : new THREE.Vector3(sign, 0, 0);
       orient(f, dir);
