@@ -112,8 +112,9 @@ body.net-split .readout, body.net-full .readout { display: none; }
 .stage.net-full .views { grid-template-columns: 1fr; }
 .stage.net-off .netview { display: none; }
 .stage.net-full .view3d { display: none; }
+.view3d, .view3d * { touch-action: none; }
 .view3d { position: relative; min-width: 0; min-height: 0; }
-#scene { width: 100%; height: 100%; display: block; }
+#scene { width: 100%; height: 100%; display: block; touch-action: none; }
 .labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .tag {
   position: absolute; transform: translate(-50%, -50%);
@@ -313,20 +314,21 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
   .demo-bar { flex-wrap: wrap; }
 
   .mobile-temps {
-    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; align-items: center;
     padding: 6px 10px; background: #100e0c; border-bottom: 1px solid var(--line);
     font-variant-numeric: tabular-nums;
   }
-  .mobile-temps .hot { font-size: 18px; font-weight: 750; white-space: nowrap; }
+  .mobile-temps .hot { font-size: 14px; font-weight: 750; white-space: nowrap; flex: none; }
   .mobile-temps .mt {
-    font-size: 12px; font-weight: 650; white-space: nowrap;
+    font-size: 11px; font-weight: 650; white-space: nowrap; flex: none;
     padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px;
   }
   .mobile-tabs {
-    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
     background: #100e0c; border-top: 1px solid var(--line);
   }
+  .mobile-tabs [data-mtab="split"] { display: none; }
   .mobile-tabs button { padding: 9px 2px; font-size: 13px; font-weight: 700; background: transparent; }
   .mobile-tabs button.on { color: var(--copper); border-color: var(--copper); }
 
@@ -342,23 +344,42 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
   body.mtab-pc .facebar,
   body.mtab-pc .panel,
   body.mtab-pc .readout { display: none !important; }
+  body.mtab-pc .layout,
+  body.mtab-pc .stage,
+  body.mtab-pc .views,
+  body.mtab-pc .view3d { height: 100%; min-height: 0; }
+  body.mtab-pc .layout { grid-template-rows: minmax(0, 1fr); }
 
   body.mtab-customize .stage, body.mtab-worth .stage { display: none; }
-  body.mtab-customize .layout { grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
-  body.mtab-customize .facebar { overflow: auto; }
+  body.mtab-customize .layout { grid-template-columns: 84px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  body.mtab-customize .facebar { overflow: auto; min-height: 0; }
+  body.mtab-customize .panel { min-height: 0; }
+  body.mtab-customize .readout { display: none !important; }
   body.mtab-worth .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   body.mtab-worth .facebar, body.mtab-worth .readout { display: none !important; }
   #worth-open, #share-link { padding: 6px 10px; }
-  body.mtab-customize .readout {
-    display: block; grid-column: 1 / -1; max-height: 32vh;
-    border-left: none; border-top: 1px solid var(--line);
-  }
 
   body.mtab-network .facebar,
   body.mtab-network .panel,
   body.mtab-network .readout,
   body.mtab-network .view3d { display: none !important; }
-  body.mtab-network .netview { border-left: none; }
+  /* Hiding the side columns does not delete their tracks. One cell, full stage. */
+  body.mtab-network .layout,
+  body.is-mobile.net-full .layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+  }
+  body.mtab-network .stage,
+  body.mtab-network .views,
+  body.mtab-network .netview,
+  body.is-mobile.net-full .stage,
+  body.is-mobile.net-full .views,
+  body.is-mobile.net-full .netview {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    border-left: none;
+  }
 
   body.mtab-split .facebar,
   body.mtab-split .panel,

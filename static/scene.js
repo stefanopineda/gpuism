@@ -9,8 +9,8 @@
  * lit ring on each fan (blue intake, red exhaust, amber internal) and a light
  * bar on each GPU in its die-temperature colour. No text is drawn over the
  * scene; hovering an object reports it instead. */
-import * as THREE from "./vendor/three.module.js?v=e6b8122216-c827829c";
-import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=e6b8122216-c827829c";
+import * as THREE from "./vendor/three.module.js?v=9e6f9ba0bf-4416ecc9";
+import { RoomEnvironment } from "./vendor/RoomEnvironment.js?v=9e6f9ba0bf-4416ecc9";
 import {
   CUE,
   MAT,
@@ -27,7 +27,7 @@ import {
   radiatorModel,
   tag,
   tube,
-} from "./parts.js?v=e6b8122216-c827829c";
+} from "./parts.js?v=9e6f9ba0bf-4416ecc9";
 
 const VIEWS = {
   front34: new THREE.Vector3(0.62, 0.38, 1.0),
@@ -108,9 +108,15 @@ export class CaseScene {
     this.scene.add(this.root);
     this.drag = null;
     this.labels = [];
-    canvas.addEventListener("pointerdown", (ev) => this._down(ev));
-    canvas.addEventListener("pointerup", (ev) => this._up(ev));
-    canvas.addEventListener("pointermove", (ev) => (this.orbit ? this._orbitMove(ev) : this._hover(ev)));
+    const viewBox = canvas.closest("#view3d") || canvas.parentElement;
+    // Pointer listeners sit on the view so a finger on the canvas or an overlay
+    // both orbit. Touch listeners stay on the canvas: iOS only cancels the
+    // scroll if preventDefault runs on the touched element, non-passive.
+    const pointerTarget = viewBox || canvas;
+    pointerTarget.addEventListener("pointerdown", (ev) => this._down(ev));
+    pointerTarget.addEventListener("pointerup", (ev) => this._up(ev));
+    pointerTarget.addEventListener("pointercancel", () => this._cancelPointer());
+    pointerTarget.addEventListener("pointermove", (ev) => (this.orbit ? this._orbitMove(ev) : this._hover(ev)));
     canvas.addEventListener(
       "wheel",
       (ev) => {
@@ -120,8 +126,21 @@ export class CaseScene {
       },
       { passive: false },
     );
+    const blockScroll = (ev) => {
+      if (ev.cancelable) ev.preventDefault();
+    };
+    canvas.addEventListener("touchstart", blockScroll, { passive: false });
+    canvas.addEventListener("touchmove", blockScroll, { passive: false });
+    if (viewBox && viewBox !== canvas) {
+      viewBox.addEventListener("touchstart", blockScroll, { passive: false });
+      viewBox.addEventListener("touchmove", blockScroll, { passive: false });
+    }
     canvas.addEventListener("dblclick", () => this.setView(this.view));
-    canvas.addEventListener("pointerleave", () => this.cb.onHover?.(null));
+    pointerTarget.addEventListener("pointerleave", () => this.cb.onHover?.(null));
+    if (viewBox && typeof ResizeObserver !== "undefined") {
+      this._ro = new ResizeObserver(() => this._resize());
+      this._ro.observe(viewBox);
+    }
     const loop = () => {
       this._resize();
       this.renderer.render(this.scene, this.camera);
@@ -129,6 +148,11 @@ export class CaseScene {
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  /* Force a camera fit. Called after the PC tab is actually on screen. */
+  relayout() {
+    this._resize(true);
   }
 
   setView(name) {
@@ -587,20 +611,26 @@ export class CaseScene {
 
   /* ------------------------------------------------------------ camera, labels */
 
-  _resize() {
+  _resize(force = false) {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
+    // A hidden tab reports 0×0 (or the canvas default). Do not frame that.
     if (!w || !h) return;
     const size = this.renderer.getSize(new THREE.Vector2());
-    if (size.x !== w || size.y !== h) {
-      this.renderer.setSize(w, h, false);
-      this._frame();
-    }
+    const aspect = w / h;
+    const sizeChanged = size.x !== w || size.y !== h;
+    const aspectChanged = Math.abs(this.camera.aspect - aspect) > 1e-3;
+    if (!force && !sizeChanged && !aspectChanged) return;
+    this.renderer.setSize(w, h, false);
+    this._frame();
   }
 
   _frame() {
     const canvas = this.canvas;
-    const aspect = (canvas.clientWidth || 1600) / Math.max(canvas.clientHeight || 900, 1);
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
+    const aspect = w / h;
     this.camera.aspect = aspect;
     this.root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.root);
@@ -700,32 +730,65 @@ export class CaseScene {
     this.cb.onHover?.(hit ? hit.object.userData.tip : null, ev);
   }
 
+  _touchLike(ev) {
+    return ev.pointerType === "touch" || ev.pointerType === "pen";
+  }
+
+  _capture(ev) {
+    try {
+      this.canvas.setPointerCapture(ev.pointerId);
+    } catch {
+      // synthetic events have no capturable pointer
+    }
+  }
+
+  _cancelPointer() {
+    this.orbit = null;
+    this.drag = null;
+    this.canvas.style.cursor = "";
+  }
+
   _down(ev) {
+    // Mouse hits on the inset or legend are not case drags. Touch/pen on the
+    // whole view orbit, including a finger that lands on a GPU or fan.
+    if (!this._touchLike(ev) && ev.target !== this.canvas) return;
     const data = this._pick(ev);
+    if (this._touchLike(ev)) {
+      this.drag = data ? { data, x: ev.clientX, y: ev.clientY, tap: true } : null;
+      this.orbit = { x: ev.clientX, y: ev.clientY, az: this.az, el: this.el, tap: true };
+      this._capture(ev);
+      this.canvas.style.cursor = "grabbing";
+      return;
+    }
     this.drag = data ? { data, x: ev.clientX, y: ev.clientY } : null;
     if (!data) {
-      // Empty space: drag to orbit the case.
       this.orbit = { x: ev.clientX, y: ev.clientY, az: this.az, el: this.el };
-      try {
-        this.canvas.setPointerCapture(ev.pointerId);
-      } catch {
-        // synthetic events have no capturable pointer
-      }
+      this._capture(ev);
       this.canvas.style.cursor = "grabbing";
     }
   }
 
   _orbitMove(ev) {
     const o = this.orbit;
-    this.az = o.az - (ev.clientX - o.x) * 0.008;
-    this.el = Math.max(-1.3, Math.min(1.3, o.el + (ev.clientY - o.y) * 0.006));
+    const dx = ev.clientX - o.x;
+    const dy = ev.clientY - o.y;
+    if (o.tap && Math.hypot(dx, dy) <= 6) return;
+    this.az = o.az - dx * 0.008;
+    this.el = Math.max(-1.3, Math.min(1.3, o.el + dy * 0.006));
     this._frame();
   }
 
   _up(ev) {
     if (this.orbit) {
+      const drag = this.drag;
+      const moved = Math.hypot(ev.clientX - this.orbit.x, ev.clientY - this.orbit.y) > 6;
       this.orbit = null;
+      this.drag = null;
       this.canvas.style.cursor = "";
+      if (!moved && drag?.tap && drag.data && this.ctx) {
+        if (drag.data.kind === "fan") this.cb.onPickMount?.(drag.data.id, drag.data.panel);
+        if (drag.data.kind === "gpu") this.cb.onPickGpu?.(drag.data.id);
+      }
       return;
     }
     const drag = this.drag;

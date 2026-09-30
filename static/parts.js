@@ -2,7 +2,7 @@
  * downloaded meshes): PBR materials, canvas textures, and real part
  * proportions. Colour is used only as a cue — a lit ring on each fan for
  * intake / exhaust / internal, and a temperature light bar on each GPU. */
-import * as THREE from "./vendor/three.module.js?v=e6b8122216-c827829c";
+import * as THREE from "./vendor/three.module.js?v=9e6f9ba0bf-4416ecc9";
 
 const cache = new Map();
 /* Shared geometries, materials and textures are built once and flagged so the

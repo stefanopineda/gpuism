@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=ee2695b350-af9c0153";
-import { renderNetwork } from "./network.js?v=ee2695b350-af9c0153";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=ee2695b350-af9c0153";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=9e6f9ba0bf-4416ecc9";
+import { renderNetwork } from "./network.js?v=9e6f9ba0bf-4416ecc9";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=9e6f9ba0bf-4416ecc9";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -261,6 +261,26 @@ function gpuTemplate(id, slot, card) {
   };
 }
 
+function isNarrow() {
+  return window.matchMedia("(max-width: 800px)").matches;
+}
+
+/* Two frames: the first applies the tab's display, the second has a real box. */
+function relayoutScene() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => state.scene?.relayout());
+  });
+}
+
+function applyMobileClasses() {
+  const on = isNarrow();
+  document.body.classList.toggle("is-mobile", on);
+  for (const tab of ["pc", "customize", "worth", "network", "split"]) {
+    document.body.classList.toggle(`mtab-${tab}`, on && state.mtab === tab);
+  }
+  document.querySelectorAll("[data-mtab]").forEach((b) => b.classList.toggle("on", b.dataset.mtab === state.mtab));
+}
+
 function enterApp() {
   $("start").classList.add("hidden");
   $("app").classList.remove("hidden");
@@ -303,6 +323,7 @@ function enterApp() {
   $("mock-banner").classList.toggle("hidden", !state.build.illustrative_mock);
   renderPanel();
   renderResults();
+  relayoutScene();
 }
 
 /* ------------------------------------------------------------------ layout */
@@ -321,16 +342,15 @@ function setView(view) {
 }
 
 function syncMobileChrome() {
-  const on = window.matchMedia("(max-width: 800px)").matches;
-  if (on && !state.mtabChosen) state.mtab = state.net === "full" ? "network" : state.net === "split" ? "split" : state.mtab || "pc";
-  document.body.classList.toggle("is-mobile", on);
-  for (const tab of ["pc", "customize", "worth", "network", "split"]) {
-    document.body.classList.toggle(`mtab-${tab}`, on && state.mtab === tab);
-  }
-  document.querySelectorAll("[data-mtab]").forEach((b) => b.classList.toggle("on", b.dataset.mtab === state.mtab));
+  const on = isNarrow();
+  if (on && state.mtab === "split") state.mtab = "network";
+  if (on && !state.mtabChosen) state.mtab = state.net === "full" || state.net === "split" ? "network" : state.mtab || "pc";
+  if (on && state.net === "split") setNet("full", true);
+  applyMobileClasses();
 }
 
 function setMobileTab(tab) {
+  if (isNarrow() && tab === "split") tab = "network";
   state.mtab = tab;
   state.mtabChosen = true;
   if (tab === "network") setNet("full");
@@ -338,7 +358,8 @@ function setMobileTab(tab) {
   else setNet("off");
   if (tab === "worth" && state.face !== "worth") setFace("worth");
   if (tab === "customize" && state.face === "worth") setFace("case");
-  syncMobileChrome();
+  applyMobileClasses();
+  relayoutScene();
 }
 
 function renderMobileTemps() {
@@ -357,10 +378,20 @@ function renderMobileTemps() {
     if (!c) return;
     root.append(el("span", { class: "mt", style: `color:${tempColor(c.t_die_c)}` }, `GPU ${i + 1} ${fmt(c.t_die_c)}`));
   });
+  const sign = sol.case_pressure_pa >= 0 ? "+" : "−";
+  const intake = (sol.branches || []).filter((b) => b.a === "amb" && b.flow_cfm > 0).reduce((s, b) => s + b.flow_cfm, 0);
+  root.append(el("span", { class: "mt" }, `${sign}${Math.abs(sol.case_pressure_pa).toFixed(1)} Pa`));
+  root.append(el("span", { class: "mt" }, `${intake.toFixed(0)} CFM`));
 }
 
 function setNet(mode, quiet) {
   if (!["off", "split", "full"].includes(mode)) return;
+  if (mode === "split" && isNarrow()) {
+    mode = "full";
+    state.mtab = "network";
+    state.mtabChosen = true;
+    applyMobileClasses();
+  }
   state.net = mode;
   document.querySelectorAll("[data-net]").forEach((b) => b.classList.toggle("on", b.dataset.net === mode));
   const stage = $("stage");
