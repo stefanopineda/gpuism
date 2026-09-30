@@ -3,9 +3,9 @@
  * and hands results to the 3D scene and the network view.
  * Rev 4.1: keep it simple. Every panel shows the one choice most people make;
  * everything else sits behind an expander. */
-import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=9e6f9ba0bf-4416ecc9";
-import { renderNetwork } from "./network.js?v=9e6f9ba0bf-4416ecc9";
-import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=9e6f9ba0bf-4416ecc9";
+import { CaseScene, activeLayouts, faceFanLabel, facePatterns } from "./scene.js?v=1158c1e396-2ca979df";
+import { renderNetwork } from "./network.js?v=1158c1e396-2ca979df";
+import { SEAL_TEXT, TIPS, installTips } from "./tips.js?v=1158c1e396-2ca979df";
 
 const FACES = ["front", "top", "rear", "bottom", "side"];
 const RADIATOR_FACES = ["front", "top", "bottom"];
@@ -182,6 +182,7 @@ function buildStartScreen() {
   state.presets.cases.forEach((c) => sel.append(el("option", { value: c.id }, c.name)));
   sel.value = "generic-atx";
   $("from-scratch").onclick = () => scratch(sel.value);
+  fitPhoneSelects($("start"));
 }
 
 async function loadBuild(id) {
@@ -265,6 +266,65 @@ function isNarrow() {
   return window.matchMedia("(max-width: 800px)").matches;
 }
 
+/* iOS Safari draws a closed <select> on one line and clips the option mid-word
+ * ("1 empty slot betwe"). On a phone, a wrapping label shows the whole option
+ * and the real control sits on top of it so the system picker still opens.
+ * Wider than 800px, the label is removed and the native control is unchanged. */
+function selectedOptionText(sel) {
+  const opt = sel.selectedOptions && sel.selectedOptions[0];
+  return opt ? opt.textContent.replace(/\s+/g, " ").trim() : "";
+}
+
+function bindSelectFace(sel) {
+  if (sel.dataset.faceBound) return;
+  sel.dataset.faceBound = "1";
+  const sync = () => {
+    const value = sel.parentElement?.classList.contains("select-face")
+      ? sel.parentElement.querySelector(":scope > .select-value")
+      : null;
+    if (value) value.textContent = selectedOptionText(sel);
+  };
+  sel.addEventListener("change", sync);
+  sel.addEventListener("input", sync);
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+  Object.defineProperty(sel, "value", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return desc.get.call(this);
+    },
+    set(v) {
+      desc.set.call(this, v);
+      sync();
+    },
+  });
+  new MutationObserver(sync).observe(sel, { childList: true, subtree: true, characterData: true });
+  sel._syncFace = sync;
+}
+
+function fitPhoneSelects(root) {
+  if (!root?.querySelectorAll) return;
+  const phone = isNarrow();
+  root.querySelectorAll("select").forEach((sel) => {
+    const face = sel.parentElement?.classList.contains("select-face") ? sel.parentElement : null;
+    if (!phone) {
+      if (face) face.replaceWith(sel);
+      return;
+    }
+    if (!face) {
+      bindSelectFace(sel);
+      const wrap = document.createElement("span");
+      wrap.className = "select-face";
+      const value = document.createElement("span");
+      value.className = "select-value";
+      value.setAttribute("aria-hidden", "true");
+      sel.parentNode.insertBefore(wrap, sel);
+      wrap.append(value, sel);
+    }
+    sel._syncFace();
+  });
+}
+
 /* Two frames: the first applies the tab's display, the second has a real box. */
 function relayoutScene() {
   requestAnimationFrame(() => {
@@ -279,6 +339,7 @@ function applyMobileClasses() {
     document.body.classList.toggle(`mtab-${tab}`, on && state.mtab === tab);
   }
   document.querySelectorAll("[data-mtab]").forEach((b) => b.classList.toggle("on", b.dataset.mtab === state.mtab));
+  fitPhoneSelects(document);
 }
 
 function enterApp() {
@@ -415,6 +476,7 @@ function renderPanel() {
   else if (state.face === "internals") root.append(...internalsPanel());
   else if (state.face === "worth") root.append(...worthPanel());
   else root.append(...gpusPanel());
+  fitPhoneSelects(root);
 }
 
 function casePanel() {
@@ -1597,6 +1659,6 @@ function toast(text, extra) {
 }
 
 // Handle for scripted checks (headless screenshots, OBS macros). Not an API.
-window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow, runWorth, copyShareLink, encodeBuild };
+window.gpusim = { state, setFace, setNet, setView, setMobileTab, changed, loadBuild, respace, solveNow, runWorth, copyShareLink, encodeBuild, fitPhoneSelects };
 
 boot();

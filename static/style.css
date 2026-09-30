@@ -389,6 +389,72 @@ details.net-more p { font-size: 13px; color: var(--muted); line-height: 1.5; max
     grid-template-rows: minmax(190px, 40vh) minmax(220px, 1fr);
   }
   body.mtab-split .netview { border-left: none; border-top: 1px solid var(--line); }
+
+  /* Closed <select>s cannot wrap, and Safari clips the chosen option mid-word.
+     The visible label wraps on spaces; the control itself stays tappable. */
+  .row > label { min-width: 0; }
+  .select-face {
+    display: block;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    background: #2a241e;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 5px 28px 5px 8px;
+    line-height: 1.35;
+    white-space: normal;
+  }
+  .select-face .select-value {
+    display: block;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: manual;
+    pointer-events: none;
+  }
+  .select-face::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    right: 11px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    margin-top: -5px;
+    border-right: 1.6px solid var(--muted);
+    border-bottom: 1.6px solid var(--muted);
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+  .select-face select {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .select-face:focus-within { border-color: var(--copper); }
+  .mount-row .select-face { font-size: 12px; padding: 4px 22px 4px 4px; }
+  .big-row .select-face { font-size: 14px; padding: 7px 28px 7px 8px; }
+}
+
+/* If a phone label is still in the tree on a wide window, it must not change layout. */
+@media (min-width: 801px) {
+  .select-face { display: contents; }
+  .select-value { display: none; }
 }
 
 /* ------------------------------------------------------------------ worth it? */
